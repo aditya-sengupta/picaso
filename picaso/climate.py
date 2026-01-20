@@ -1223,8 +1223,6 @@ def t_start(nofczns,nstr,convergence_criteria,#
                             grad_x, cp_x = did_grad_cp( beta[j1-1], press, AdiabatBundle)
                         
                         temp[j1]= exp(log(temp[j1-1]) + grad_x*(log(pressure[j1]) - log(pressure[j1-1])))
-                
-                
 
                 # temperature has been perturbed
                 # now recalculate the IR fluxes, so call picaso with only thermal
@@ -1282,9 +1280,6 @@ def t_start(nofczns,nstr,convergence_criteria,#
                     n_bot_c = nstr[nc+2] +1
                     
                     
-                        
-                    
-                   
                     if n_top_c == n_top_r+1 :
                         
                         A[n_top_c-nco,jm-no] = (flux_net_ir[n_top_c]-flux_net_old[n_top_c])/del_t
@@ -1294,11 +1289,9 @@ def t_start(nofczns,nstr,convergence_criteria,#
                         A[n_top_c-nco,jm-no] = (flux_net_ir_layer[n_top_c-1]-flux_net_midpt_old[n_top_c-1])/del_t
                         
                     
-                    
                     # omitted -1 to include last element 
                     
                     for im in range(n_top_c,n_strt_c):
-                        #print(im+1-nco,jm-no, "3rd",jm,no)
                         A[im+1-nco,jm-no] = (flux_net_ir_layer[im]-flux_net_midpt_old[im])/del_t
                         
                     # changing them back to what they were
@@ -1323,7 +1316,6 @@ def t_start(nofczns,nstr,convergence_criteria,#
             no += n_conv_bot-n_strt
         
         # a long print statement here in original. dont know if needed
-
         
         for i in range(n_total):
             sum=0.0
@@ -1342,6 +1334,7 @@ def t_start(nofczns,nstr,convergence_criteria,#
         #raise Exception ("stop")
 
         A, p = mat_sol(A, nlevel, n_total, p)
+
         
         #print(p)
         
@@ -1433,11 +1426,11 @@ def t_start(nofczns,nstr,convergence_criteria,#
                 
                    
                 #+1 for fort to py
-                
                 for j in range(n_top_d,n_strt_d+1):
                     temp[j]= beta[j]+ alam*p[j-ndo]
                     #print(p[j-ndo],beta[j])
                 #+1 for fort to py
+                
                 for j1 in range(n_strt_d+1, n_bot_d+1):
 
                     press = sqrt(pressure[j1-1]*pressure[j1])
@@ -1600,11 +1593,17 @@ def t_start(nofczns,nstr,convergence_criteria,#
                 if verbose: print("Got stuck with temp NaN -- so escaping the while loop in tstart")
         
 
+        if verbose: 
+            min_temp, max_temp = np.round(min(temp), 3), np.round(max(temp), 3)
+            flux_balance = f/abs(tidal[0])**2
+            log10_flux_balance = np.round(np.log10(flux_balance), 3)
+            print("Iteration number", its,", min, max temp ", min_temp, max_temp, ", log10 flux balance ", log10_flux_balance)
         if verbose: print("Iteration number ", its,", min , max temp ", min(temp),max(temp), ", flux balance ", flux_net[0]/abs(tidal[0])) #f/abs(tidal[0])**2) this other output here is slightly less straightforward with the square terms for exoplanets so making this just fnet/tidal for now
 
         if save_profile == 1:
             all_profiles = np.append(all_profiles,temp_old)
             cldsave_count += 1
+        
         if flag_converge == 2 : # converged
             # calculate  lapse rate
             dtdp=np.zeros(shape=(nlevel-1))
@@ -1617,7 +1616,7 @@ def t_start(nofczns,nstr,convergence_criteria,#
            
             return   temp,  dtdp, all_profiles , flux_net_ir,flux_net_v, flux_plus_ir[0,:] 
         
-    if verbose: print("Iterations exceeded it_max ! sorry ")
+    if verbose and False: print("Iterations exceeded it_max ! sorry ")
     dtdp=np.zeros(shape=(nlevel-1))
     for j in range(nlevel -1):
         dtdp[j] = (log( temp[j]) - log( temp[j+1]))/(log(pressure[j]) - log(pressure[j+1]))
@@ -1942,7 +1941,6 @@ def get_fluxes(Atmosphere, OpacityWEd, OpacityNoEd,ScatteringPhase,
 
         #if full output is requested add in xint at top for 3d plots
 
-
     if thermal:
 
         #use toon method (and tridiagonal matrix solver) to get net cumulative fluxes 
@@ -2021,6 +2019,7 @@ def get_fluxes(Atmosphere, OpacityWEd, OpacityNoEd,ScatteringPhase,
         """
 
         #if full output is requested add in flux at top for 3d plots
+    
     
     return flux_net_v_layer, flux_net_v, flux_plus_v, flux_minus_v , flux_net_ir_layer, flux_net_ir, flux_plus_ir, flux_minus_ir
 

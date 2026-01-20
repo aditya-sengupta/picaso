@@ -10,7 +10,9 @@
 *.swo
 *.csv
 *.npy
+*.fits
 *.h5
+*.hdf5
 
 # Jupyter Notebooks
 .ipynb_checkpoints
@@ -40,3 +42,9 @@ docs/notebooks/D_climate/W39b_+1.0_0.3_kzz8
 docs/notebooks/D_climate/WASP39_flux.txt
 docs/notebooks/D_climate/photochem_rxns.yaml
 docs/notebooks/D_climate/photochem_thermo.yaml
+data/*
+grp/*
+.CondaPkg
+.CondaPkg/*
+*.mp4
+reference/*
