@@ -46,14 +46,13 @@ temp_guess = np.zeros(shape=(nlevel)) + 500 # K , isothermal atmosphere guess
 
 nofczns = 1 # number of convective zones initially. Let's not play with this for now.
 
-nstr_upper = 83 # top most level of guessed convective zone
-nstr_deep = nlevel -2 # this is always the case. Dont change this
-nstr = np.array([0,nstr_upper,nstr_deep,0,0,0]) # initial guess of convective zones
+rcb_guess = 83 # top most level of guessed convective zone
+nstr = 83 # initial guess of convective zones
 
 # Here are some other parameters needed for the code.
 rfacv = 0.0 #we are focused on a brown dwarf so let's keep this as is
 
-cl_run.inputs_climate(temp_guess= temp_guess, pressure= pressure, nstr = nstr, nofczns = nofczns , rfacv = rfacv)
+cl_run.inputs_climate(temp_guess= temp_guess, pressure= pressure, rcb_guess = rcb_guess, rfacv = rfacv)
 
 out = cl_run.climate(opacity_ck, save_all_profiles=True,with_spec=True)
 

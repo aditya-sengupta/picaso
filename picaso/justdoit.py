@@ -4825,12 +4825,8 @@ class inputs():
         else :
             self.inputs['planet']['T_eff'] = 0
 
-    def inputs_climate(self, temp_guess= None, pressure= None, rfaci = 1,nofczns = 1 ,
-        nstr = None,  rfacv = None,
-        cloudy = False, mh = None, CtoO = None, species = None, fsed = None, mieff_dir = None,
-        photochem=False, photochem_init_args=None, sonora_abunds_photochem = False, df_sonora_photochem = None,
-        fhole = None, do_holes = False, fthin_cld = None, 
-        beta = 1, virga_param = 'const', moistgrad = False, deq_rainout= False, quench_ph3 = True):
+    def inputs_climate(self, temp_guess= None, pressure= None, rfaci = 1,
+        rcb_guess = None,  rfacv = None, moistgrad = False):
         """
         Get Inputs for Climate run
 
