@@ -32,7 +32,7 @@ grav = 1000 # Gravity of your brown dwarf in m/s/s
 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
 cl_run.effective_temp(teff) # input effective temperature
 
-opacity_ck = jdi.opannection(ck_db=ck_db)
+opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted')
 
 nlevel = 91 # number of plane-parallel levels in your code
 
@@ -80,6 +80,4 @@ plt.title(r"T$_{\rm eff}$= 1000 K, log(g)=5.0",fontsize=25)
 
 # good, that works, as it should since this is from the picaso docs
 # now, can I get the flux balance for this, and for something that is not the solution to this
-
-
 # %%
