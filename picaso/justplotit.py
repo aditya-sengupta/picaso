@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.animation as animation
 from matplotlib import rc
+from virga import justdoit as vj
 
 from scipy.stats.stats import pearsonr  
 from scipy.stats import binned_statistic
@@ -2179,14 +2180,74 @@ def pt_adiabat(clima_out, input_class, opacityclass, plot=True):
 
     Atmosphere = calculate_atm(input_class,opacityclass,only_atmosphere=True)
 
-    layer_p = clima_out['spectrum_output']['full_output']['layer']['pressure']
-    
+    # errors if we've not asked for spectrum
+    # layer_p = clima_out['spectrum_output']['full_output']['layer']['pressure']
     grad, cp = convec(clima_out['temperature'],clima_out['pressure'],
                       AdiabatBundle, Atmosphere,moist=moist)
                       
-    plt.semilogy(clima_out['dtdp'], layer_p)
-    plt.semilogy(grad,layer_p) 
-    plt.ylim([1e4,1e-4]), 
-    plt.xlabel('dT/dP vs adiabat')
-    plt.ylabel('Pressure(bars)')
-    return cp, grad, clima_out['dtdp'], layer_p
+    #plt.semilogy(clima_out['dtdp'], layer_p)
+    #plt.semilogy(grad,layer_p) 
+    #plt.ylim([1e4,1e-4]), 
+    #plt.xlabel('dT/dP vs adiabat')
+    #plt.ylabel('Pressure(bars)')
+    return cp, grad, clima_out['dtdp']
+
+def diagnostic_plot(out, grad):
+    fig, axes = plt.subplots(3, 2, figsize=(12, 15))
+
+    layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
+    N = len(out["pressure"])
+
+    cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
+        
+    for (i, condensible) in enumerate(out["virga_output"]["condensibles"]):
+        axes[0, 0].loglog(out["virga_output"]["condensate_mmr"][:,i], out["virga_output"]["pressure"], label=condensible, color=cloud_colors[i])
+    axes[0, 0].set_xlim((1e-10, 2 * np.max(out["virga_output"]["condensate_mmr"])))
+    axes[0, 0].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
+    axes[0, 0].set_xlabel("Condensate mass mixing ratio")
+    axes[0, 0].set_ylabel("Pressure (bar)")
+    axes[0, 0].invert_yaxis()
+    axes[0, 0].legend()
+
+    convective_boundary = out["cvz_locs"][4]
+    axes[0, 1].semilogy(out["temperature"], out["pressure"])
+    axes[0, 1].set_xlim((0, np.max(out["temperature"])))
+    axes[0, 1].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
+    axes[0, 1].scatter([out["temperature"][convective_boundary]], [out["pressure"][convective_boundary]], c="k")
+    for (gas, c) in zip(out["virga_output"]["condensibles"], cloud_colors):
+        _, condt = vj.condensation_t(gas, 1, 2.2, out["pressure"])
+        axes[0, 1].semilogy(condt, out["pressure"], ls="--", label=gas, color=c)
+    axes[0, 1].set_xlabel("Temperature (K)")
+    axes[0, 1].set_ylabel("Pressure (bar)")
+    axes[0, 1].invert_yaxis()
+    axes[0, 1].legend()
+
+    axes[1, 0].loglog(np.abs(out["fnet/fnetir"]), out["pressure"])
+    axes[1, 0].set_xlabel("Fnet/Fnet-IR")
+    axes[1, 0].set_ylabel("Pressure (bar)")
+    axes[1, 0].axvline(1e-3, ls="--", color="k")
+    axes[1, 0].invert_yaxis()
+
+    T_B = brightness_temperature(out["spectrum_output"], plot=False)
+    axes[1, 1].semilogx(1e4/out["spectrum_output"]["wavenumber"], T_B)
+    axes[1, 1].invert_yaxis()
+    axes[1, 1].axhline(np.max(out["temperature"]), ls="--", c='k')
+    
+    axes[2, 0].loglog(out["all_opd"][-(N-1):], layer_p)
+    axes[2, 0].invert_yaxis()
+    axes[2, 0].set_xlim((1e-10, 2 * np.max(out["all_opd"][-(N-1):])))
+    axes[2, 0].set_xlabel("Optical depth")
+    axes[2, 0].set_ylabel("Pressure (bar)")
+
+    axes[2, 1].semilogy(out["dtdp"], layer_p)
+    axes[2, 1].semilogy(grad, layer_p)
+    axes[2, 1].invert_yaxis()
+    axes[2, 1].set_xlabel("dtdp (K/bar)")
+    axes[2, 1].set_ylabel("Pressure (bar)")
+    ax2 = axes[2, 1].twinx()
+    ax2.set_ylabel("Layer number")
+    ax2.set_yticks(np.arange(0, N-1, 10))
+    ax2.set_yticklabels(np.arange(0, N-1, 10)[::-1])
+    
+    plt.tight_layout()
+    plt.show()

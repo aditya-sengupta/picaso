@@ -1431,7 +1431,7 @@ def find_strat(bundle, nofczns,nstr,
         if nstr[1] < 5 :
             raise ValueError( "Convection zone grew to Top of atmosphere, Need to Stop")
         
-        profile_flag, pressure, temp, dtdp, CloudParameters, cld_out, flux_net_ir_layer, flux_net_v_layer,flux_plus_ir_attop, all_profiles,all_opd,all_kzz = profile(bundle,
+        profile_flag, pressure, temp, dtdp, CloudParameters, flux_net_ir_layer, flux_net_v_layer,flux_plus_ir_attop, all_profiles,all_opd,all_kzz = profile(bundle,
             nofczns, nstr, temp, pressure, 
             AdiabatBundle,opacityclass,
             grav,
