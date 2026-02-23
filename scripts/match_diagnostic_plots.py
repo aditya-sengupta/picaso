@@ -8,10 +8,7 @@ import virga.justdoit as vj
 import astropy.units as u
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import h5py
 from copy import deepcopy
-from datetime import datetime
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 
@@ -26,8 +23,8 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bob
 nstr_upper = 74
 fsed = 2
 teff = 1200
-cloudmode = "selfconsistent"
-grav = 100.0
+cloudmode = "fixed"
+grav = 316.0
 
 cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
@@ -49,7 +46,5 @@ out = deepcopy(cl_run.climate(opacity_ck, save_all_profiles=True,with_spec=True)
 
 # %%
 _, grad, _ = jpi.pt_adiabat(out, cl_run, opacity_ck, plot=False)
-# %%
 jpi.diagnostic_plot(out, grad)
 # %%
-# we also need cloud diagnostics

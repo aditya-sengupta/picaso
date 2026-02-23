@@ -1774,7 +1774,7 @@ def profile(bundle, nofczns, nstr, temp, pressure,
                OpacityWEd=OpacityWEd, OpacityNoEd=OpacityNoEd,ScatteringPhase=ScatteringPhase,Disco=Disco,Opagrid=Opagrid, F0PI=F0PI,
                OpacityWEd_clear=OpacityWEd_clear,OpacityNoEd_clear=OpacityNoEd_clear,
                #kwargs for get_kzz function
-               moist=moist, do_holes=do_holes, fhole=fhole)
+               moist=moist, do_holes=do_holes, fhole=fhole, verbose=verbose)
         if CloudParameters.cloudy != "cloudless":
             # this is a slightly bad hack just so i can move on; 
             bundle.inputs['atmosphere']['kzz']['sc_kzz']=kz #bookeeping current kz 
@@ -1812,7 +1812,7 @@ def profile(bundle, nofczns, nstr, temp, pressure,
     ## begin bigger loop which gets opacities
     for iii in range(itmx):
         if do_holes:
-            temp, dtdp, all_profiles,  flux_net_ir_layer,flux_net_v_layer, flux_plus_ir_attop = t_start(
+            temp, dtdp, all_profiles, flux_net_ir_layer,flux_net_v_layer, flux_plus_ir_attop = t_start(
                 nofczns,nstr,convergence_criteria, rfaci, rfacv, tidal,
                 Atmosphere, OpacityWEd, OpacityNoEd,ScatteringPhase, Disco,Opagrid, AdiabatBundle,
                 F0PI,
@@ -1847,7 +1847,7 @@ def profile(bundle, nofczns, nstr, temp, pressure,
                 #OpacityWEd_clear=OpacityWEd_clear,OpacityNoEd_clear=OpacityNoEd_clear,
                 flux_net_ir_layer=flux_net_ir_layer,flux_plus_ir_attop=flux_plus_ir_attop,
                 #kwargs for get_kzz function
-                moist=moist, do_holes=do_holes,fhole=fhole)
+                moist=moist, do_holes=do_holes,fhole=fhole, verbose=verbose)
             if save_kzz: 
                 all_kzz = np.append(all_kzz,kz)
             #are clouds turned on such that we need the sc kzz for virga? 
@@ -1869,8 +1869,7 @@ def profile(bundle, nofczns, nstr, temp, pressure,
             bundle.premix_atmosphere_photochem(quench_levels=quench_levels,verbose=verbose)
             
         ### 4) IF: COMPUTE CLOUDS 
-        df_cld, taudif, taudif_tol, CloudParameters = update_clouds(bundle, opacityclass, CloudParameters,Atmosphere,
-                                                                        kz_cloud,virga_kwargs,hole_kwargs,verbose=verbose)
+        df_cld, taudif, taudif_tol, CloudParameters = update_clouds(bundle, opacityclass, CloudParameters,Atmosphere, kz_cloud,virga_kwargs,hole_kwargs,verbose=verbose)
         
         if save_profile and cloudy == "selfconsistent":
             all_opd = np.append(all_opd,df_cld['opd'].values[55::196]) #save opd at 4 micron

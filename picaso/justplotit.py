@@ -2193,7 +2193,7 @@ def pt_adiabat(clima_out, input_class, opacityclass, plot=True):
     return cp, grad, clima_out['dtdp']
 
 def diagnostic_plot(out, grad):
-    fig, axes = plt.subplots(3, 2, figsize=(12, 15))
+    fig, axes = plt.subplots(3, 2, figsize=(9, 12))
 
     layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
     N = len(out["pressure"])
@@ -2233,7 +2233,7 @@ def diagnostic_plot(out, grad):
     axes[1, 1].invert_yaxis()
     axes[1, 1].axhline(np.max(out["temperature"]), ls="--", c='k')
     
-    axes[2, 0].loglog(out["all_opd"][-(N-1):], layer_p)
+    axes[2, 0].loglog(out["virga_output"]["opd_per_layer"][:,55], layer_p)
     axes[2, 0].invert_yaxis()
     axes[2, 0].set_xlim((1e-10, 2 * np.max(out["all_opd"][-(N-1):])))
     axes[2, 0].set_xlabel("Optical depth")
