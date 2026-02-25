@@ -4343,7 +4343,7 @@ class inputs():
         #if this is a climate run lets make sure we have all the right inputs set 
         if 'climate' in self.inputs['calculation']:
             #here are all the virga kwargs 
-            virga_kwargs = dict(patchy_do_holes=do_holes, patchy_fthin_cld=fthin_cld,patchy_fhole=fhole,
+            virga_kwargs = dict(runmode=runmode, patchy_do_holes=do_holes, patchy_fthin_cld=fthin_cld,patchy_fhole=fhole,
                             condensates=condensates, directory=directory,
                             fsed=fsed, b=b, eps=eps, param=param, 
                             mh=mh, mmw=mmw, kz_min=kz_min, sig=sig,

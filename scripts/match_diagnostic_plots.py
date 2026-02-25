@@ -41,10 +41,7 @@ temp_guess = np.array(sonora_df["T"])
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
 cl_run.virga(condensates=cloud_species, directory="/Users/adityasengupta/virga/refrind", runmode=cloudmode, mh=1, fsed=fsed, latent_heat=True)
 
-# %%
 out = deepcopy(cl_run.climate(opacity_ck, save_all_profiles=True,with_spec=True))
-
 # %%
-_, grad, _ = jpi.pt_adiabat(out, cl_run, opacity_ck, plot=False)
-jpi.diagnostic_plot(out, grad)
+jpi.diagnostic_plot(out, cl_run, opacity_ck, "/Users/adityasengupta/picaso/figures/bd_fixed_figures/test_diagnostic_plot.png")
 # %%

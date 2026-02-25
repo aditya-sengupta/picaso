@@ -54,3 +54,5 @@ grp/*
 .CondaPkg/*
 *.mp4
 reference/*
+
+*.png
