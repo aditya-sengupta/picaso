@@ -5186,9 +5186,9 @@ class inputs():
         opd_cld_climate = np.zeros(shape=(self.nlevel-1,nwno_clouds,4))
         g0_cld_climate = np.zeros(shape=(self.nlevel-1,nwno_clouds,4))
         w0_cld_climate = np.zeros(shape=(self.nlevel-1,nwno_clouds,4))
-        opd_cld_climate[:,:,0] += self.fixed_opd
-        g0_cld_climate[:,:,0] += self.fixed_g0
-        w0_cld_climate[:,:,0] += self.fixed_w0
+        # opd_cld_climate[:,:,0] += self.fixed_opd
+        # g0_cld_climate[:,:,0] += self.fixed_g0
+        # w0_cld_climate[:,:,0] += self.fixed_w0
 
         #BUNDLING
         virga_specific =[['virga_'+i,val] for i ,val in virga_kwargs.items() if 'patchy' not in i]

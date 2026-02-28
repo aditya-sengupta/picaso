@@ -1,0 +1,7 @@
+It looks like the test from correctness_testing.md came up negative; the answers are in fact changing in a way that can't be accounted for by the slight changes to the cloud profile.
+This feature worked correctly at commit a19a616, but the API has changed slightly since then.
+I have checked out the previous version of the source and of scripts/bd_grid_fixed.py -- only I will run any commands involving git, you will not.
+
+1. Rewrite scripts/correctness_test.py so that it works with the previous interface. The current version of scripts/bd_grid_fixed.py has this interface. Put this version of the script in a new file.
+2. Rerun the test and check that nothing has changed between the saved version of the output and the current one. Don't overwrite previous figures or .pkl outputs -- add a tag to the filenames like "regression".
+3. In the rerun version of the test, create a log of the opacity that's in CloudParameters on each call to update_clouds. Opacity is a 90x196 array, and we don't need that much data to confirm everything's staying the same, so just report the maximum of this array. I will then check out the newer versions and rerun this script. Update correctness_test.py so that it does this too.

@@ -1,9 +1,12 @@
+import logging
 import numpy as np
 from numba import jit
 
 from virga import justdoit as vj
 
 from .grad import moist_grad, did_grad_cp
+
+logger = logging.getLogger(__name__)
 
 # still not developed fully. virga has a function already maybe just use that
 #def get_kzz(pressure, temp,grav,mmw,tidal,flux_net_ir_layer, flux_plus_ir_attop,AdiabatBundle,nstr, Atmosphere, moist = False):
@@ -246,7 +249,17 @@ def update_clouds(bundle, opacityclass, CloudParameters, Atmosphere, kzz, virga_
     ```
     """
     cloudy = CloudParameters.cloudy
-    if cloudy == "cloudless" or cloudy == "fixed":
+    opd_max = np.max(CloudParameters.OPD) if np.size(CloudParameters.OPD) > 0 else 0.0
+    logger.info(f"update_clouds: cloudy={cloudy}, max(OPD)={opd_max:.6e}")
+    if cloudy == "cloudless" or cloudy == "fixed_after_first":
+        return 0, 0, 0.1, CloudParameters
+    elif cloudy == "fixed":
+        CloudParameters = CloudParameters._replace(
+            cloudy="fixed_after_first",
+            OPD=CloudParameters.OPD[:,:,0]+bundle.fixed_opd,
+            G0=CloudParameters.G0[:,:,0]+bundle.fixed_g0,
+            W0=CloudParameters.W0[:,:,0]+bundle.fixed_w0,
+        )
         return 0, 0, 0.1, CloudParameters
     elif cloudy == "selfconsistent":
         return update_clouds_selfconsistent(bundle, opacityclass, CloudParameters, Atmosphere, kzz, virga_kwargs, hole_kwargs, verbose=verbose)
