@@ -5186,9 +5186,9 @@ class inputs():
         opd_cld_climate = np.zeros(shape=(self.nlevel-1,nwno_clouds,4))
         g0_cld_climate = np.zeros(shape=(self.nlevel-1,nwno_clouds,4))
         w0_cld_climate = np.zeros(shape=(self.nlevel-1,nwno_clouds,4))
-        # opd_cld_climate[:,:,0] += self.fixed_opd
-        # g0_cld_climate[:,:,0] += self.fixed_g0
-        # w0_cld_climate[:,:,0] += self.fixed_w0
+        opd_cld_climate[:,:,0] += self.fixed_opd
+        g0_cld_climate[:,:,0] += self.fixed_g0
+        w0_cld_climate[:,:,0] += self.fixed_w0
 
         #BUNDLING
         virga_specific =[['virga_'+i,val] for i ,val in virga_kwargs.items() if 'patchy' not in i]
@@ -5200,6 +5200,14 @@ class inputs():
         CloudParameters=CloudParametersT(*([cloudy, opd_cld_climate,g0_cld_climate,w0_cld_climate,None]
                                         +[i[1] for i in virga_specific]
                                         +[i[1] for i in hole_specific]))
+
+        if cloudy == "fixed":
+            level_pressure = self.inputs['atmosphere']['profile']['pressure']
+            wno = opacityclass.wno
+            layer_pressure = np.sqrt(level_pressure.values[:-1] * level_pressure.values[1:])
+            df_cld = vj.picaso_format(CloudParameters.OPD[:,:,0], CloudParameters.W0[:,:,0], CloudParameters.G0[:,:,0],
+                                    pressure=layer_pressure, wavenumber=wno)
+            self.clouds(df=df_cld)
 
         if verbose:
             self.interpret_run()

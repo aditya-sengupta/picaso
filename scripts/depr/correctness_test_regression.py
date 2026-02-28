@@ -37,11 +37,8 @@ semi_major = np.inf
 
 out_dir = os.path.join(picaso_path, "figures/userdefinedclouds_comparison")
 
-# Three cases to test (matching the old saved outputs)
 test_cases = [
     {"teff": 900, "grav": 316},
-    {"teff": 1500, "grav": 1000},
-    {"teff": 1800, "grav": 3160},
 ]
 
 for case in test_cases:

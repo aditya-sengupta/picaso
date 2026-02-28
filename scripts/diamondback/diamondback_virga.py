@@ -8,7 +8,9 @@ import re
 from os import path
 from functools import reduce
 
-from scripts.diamondback.diamondback_io import readInFile, diamondback_datapath
+import sys
+sys.path.append(".")
+from diamondback_io import readInFile, diamondback_datapath
 lmap = lambda f, x: list(map(f, x))
 
 # %%
@@ -39,7 +41,7 @@ def run_virga_to_match_diamondback(teff, grav_ms2, fsed, gases, metallicity=1.0,
     sum_planet.gravity(gravity=grav_ms2, gravity_unit=u.Unit('m/(s**2)'))
     sum_planet.ptk(df = diamondback_ptk)
     
-    return vdi.compute(sum_planet, "~/projects/clouds/virga/refrind", og_solver=True)
+    return vdi.compute(sum_planet, "~/virga/refrind", og_solver=True)
     
     diamondback_ptk = read_diamondback_clouds(teff, grav_ms2, fsed)
     recommended_gases = vdi.recommend_gas(diamondback_ptk["pressure"], diamondback_ptk["temperature"], metallicity, mean_molecular_weight)

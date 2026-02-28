@@ -15,6 +15,7 @@ from copy import deepcopy
 from datetime import datetime
 
 sys.path.append(".")
+from load_diamondback import read_diamondback_clouds
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
 from diagnostic_plot import diagnostic_plot
 
@@ -57,13 +58,17 @@ if semi_major < np.inf:
 nlevel = 91 # number of plane-parallel levels in your code
 rfacv = 0.5
 
-# sonora_df = pd.read_csv(f"reference/sonora_grids/diamondback/t{teff}g{grav}f{fsed}_m0.0_co1.0.pt", sep=r"\s+", skiprows=[1])
-sonora_df = pd.read_csv(f"reference/sonora_grids/diamondback/t900g{grav}f{fsed}_m0.0_co1.0.pt", sep=r"\s+", skiprows=[1])
-pressure_grid = np.logspace(-5, 3, nlevel)
-temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
-
+if semi_major < np.inf:
+    pressure_grid = np.logspace(-5, 3, nlevel)
+    temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
+    kz = np.ones_like(pressure_grid) * 1e10
+else:
+    df = read_diamondback_clouds(teff, grav, fsed)
+    pressure_grid = np.array(df['pressure'])
+    temp_guess = np.array(df['temperature'])
+    kz = np.array(df['kz'])
+    
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
-kz = np.ones_like(pressure_grid) * 1e10
 virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
 virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
 virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)

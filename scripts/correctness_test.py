@@ -33,11 +33,10 @@ ck_db = os.path.join(os.getenv('picaso_refdata'), 'opacities', 'preweighted', f'
 nstr_upper = 88
 fsed = 2
 
-# Three cases to test
 test_cases = [
-    {"teff": 900, "grav": 316},
-    # {"teff": 1500, "grav": 1000},
-    # {"teff": 1800, "grav": 3160},
+    # {"teff": 900, "grav": 316},
+    {"teff": 1500, "grav": 1000},
+    {"teff": 1800, "grav": 3160},
 ]
 
 out_dir = os.path.join(picaso_path, "figures/userdefinedclouds_comparison")
