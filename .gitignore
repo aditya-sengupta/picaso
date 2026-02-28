@@ -13,11 +13,14 @@
 *.fits
 *.h5
 *.hdf5
+<<<<<<< HEAD
 *.nc
 *.pt
 *.dat
 *.fits
 *.ascii
+=======
+>>>>>>> dev
 
 # Jupyter Notebooks
 .ipynb_checkpoints
@@ -34,7 +37,6 @@ dist/
 *__pycache__/
 
 # reference files 
-reference/*
 reference/sonora_grids/*
 reference/stellar_grids/*
 reference/virga/*
@@ -45,7 +47,7 @@ docs/notebooks/Retrieval.ipynb
 #photochem files 
 docs/notebooks/D_climate/W39b_+1.0_0.3_kzz11
 docs/notebooks/D_climate/W39b_+1.0_0.3_kzz8
-docs/notebooks/D_climate/WASP39_flux.txt
+docs/notebooks/D_climate/TOI-193.txt
 docs/notebooks/D_climate/photochem_rxns.yaml
 docs/notebooks/D_climate/photochem_thermo.yaml
 data/*

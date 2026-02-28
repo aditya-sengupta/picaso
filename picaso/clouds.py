@@ -249,8 +249,6 @@ def update_clouds(bundle, opacityclass, CloudParameters, Atmosphere, kzz, virga_
     ```
     """
     cloudy = CloudParameters.cloudy
-    opd_max = np.max(CloudParameters.OPD) if np.size(CloudParameters.OPD) > 0 else 0.0
-    logger.info(f"update_clouds: cloudy={cloudy}, max(OPD)={opd_max:.6e}")
     if cloudy == "cloudless" or cloudy == "fixed":
         return 0, 0, 0.1, CloudParameters
     elif cloudy == "selfconsistent":
