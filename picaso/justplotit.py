@@ -2192,7 +2192,7 @@ def pt_adiabat(clima_out, input_class, opacityclass, plot=True):
     #plt.ylabel('Pressure(bars)')
     return cp, grad, clima_out['dtdp']
 
-def diagnostic_plot(out, cl_run, opacity_ck, fname=None):
+def diagnostic_plot(out, cl_run, opacity_ck, fname=None, temp_guess=None):
     _, grad, _ = pt_adiabat(out, cl_run, opacity_ck, plot=False)
     fig, axes = plt.subplots(3, 2, figsize=(9, 12))
     t = f"Teff = {cl_run.inputs['planet']['T_eff']}, g = {cl_run.inputs['planet']['gravity'] / 100}, cloud = {cl_run.inputs['climate']['cloudy']}"
@@ -2215,11 +2215,13 @@ def diagnostic_plot(out, cl_run, opacity_ck, fname=None):
     axes[0, 0].legend()
 
     cvz_locs = out["cvz_locs"]
-    if cvz_locs[-2] > 0:
+    if cvz_locs[-2] > 0 and cvz_locs[2] != 89:
         convective_boundary = cvz_locs[-2]
     else:
         convective_boundary = cvz_locs[1]
-    axes[0, 1].semilogy(out["temperature"], out["pressure"])
+    axes[0, 1].semilogy(out["temperature"], out["pressure"], label="solution")
+    if temp_guess is not None:
+        axes[0, 1].semilogy(temp_guess, out["pressure"], ls="--", c='b', label="guess")
     axes[0, 1].set_xlim((0, np.max(out["temperature"])))
     axes[0, 1].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
     axes[0, 1].scatter([out["temperature"][convective_boundary]], [out["pressure"][convective_boundary]], c="k")

@@ -69,54 +69,10 @@ class TemperatureOptimization():
             ]
         return constraints
 
-    def jacobian(self, x):
-        """Returns Jacobian of constraints."""
-        jac = np.zeros((len(self.constraints(np.zeros(2*self.N-1))), 2*self.N-1))
-        temperature = x[:self.N]
-        convective_indicators = x[self.N:]
-
-        # Temperature differences and derivatives
-        dT = np.diff(temperature)
-        dlp = np.diff(self.log_pressure)
-        lapse_rate = dT / dlp
-        flux = (temperature - self.T0 - self.C1 * (self.log_pressure - self.log_pressure_0) ** 2) ** 2
-        dflux_dT = 2 * (temperature - self.T0 - self.C1 * (self.log_pressure - self.log_pressure_0) ** 2)
-
-        # Partial derivatives for jacobian computation
-        row = 0
-        # Lapse rate constraints
-        for i in range(self.N-1):
-            jac[row, i] = -1 / dlp[i]
-            jac[row, i+1] = 1 / dlp[i]
-            row += 1
-
-        # Convective indicator difference constraints
-        for i in range(self.N-2):
-            jac[row, self.N + i] = -1
-            jac[row, self.N + i+1] = 1
-            row += 1
-
-        # Flux threshold constraints (simplified)
-        for i in range(self.N-1):
-            row += 1
-
-        # Temperature constraints
-        for i in range(self.N):
-            jac[row, i] = 1
-            row += 1
-
-        # Convective indicator coupling constraints
-        for i in range(self.N-1):
-            row += 1
-
-        # Second derivative constraints
-        for i in range(self.N-2):
-            jac[row, i] = 1
-            jac[row, i+1] = -2
-            jac[row, i+2] = 1
-            row += 1
-
-        return jac
+    def jacobian(self, x, dx=1e-8):
+        constraints_up = self.constraints(x + dx)
+        constraints_down = self.constraints(x - dx)
+        return (constraints_up - constraints_down) / (2 * dx)
 
 N = 91
 log_pressure = np.linspace(-4, 2, N)
@@ -127,10 +83,9 @@ flux_threshold = 1e-30
 rcb_index = 50
 log_pressure_rcb = log_pressure[rcb_index]
 adiabatic_slope = 2 * C1 * (log_pressure_rcb - log_pressure_0)
-
 to = TemperatureOptimization(N, log_pressure, adiabatic_slope, T0, C1, log_pressure_0, flux_threshold)
 temperature_guess = 200 + 25 * log_pressure
-x0 = np.concatenate((temperature_guess, np.zeros(N-1)))
+x0 = np.concatenate((temperature_guess, np.ones(N-1)))
 cl0 = to.constraints(x0)
 
 nlp = cyipopt.Problem(
@@ -142,3 +97,4 @@ nlp = cyipopt.Problem(
    cl=to.constraint_bounds[0],
    cu=to.constraint_bounds[1],
 )
+nlp.solve(x0)

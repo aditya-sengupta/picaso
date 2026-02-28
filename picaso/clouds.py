@@ -248,13 +248,9 @@ def update_clouds(bundle, opacityclass, CloudParameters, Atmosphere, kzz, virga_
     cloudy = CloudParameters.cloudy
     if cloudy == "cloudless":
         return 0, 0, 0.1, CloudParameters
-    elif cloudy == "selfconsistent" or cloudy == "fixed":
-        if cloudy == "fixed":
-            CloudParameters = CloudParameters._replace(cloudy="fixed_after_first")
-        # On the first iteration, fixed clouds are self-consistent
-        # On later iterations, we keep returning the opacity/SSA/asymmetry calculated in this iteration
+    elif cloudy == "selfconsistent":
         return update_clouds_selfconsistent(bundle, opacityclass, CloudParameters, Atmosphere, kzz, virga_kwargs, hole_kwargs, verbose=verbose)
-    elif cloudy == "fixed_after_first":
+    elif cloudy == "fixed":
         level_pressure, wno = bundle.inputs['atmosphere']['profile']['pressure'], opacityclass.wno
         opd_cld_climate, g0_cld_climate, w0_cld_climate = CloudParameters.OPD, CloudParameters.G0, CloudParameters.W0
         opd_clmt = opd_cld_climate[:,:,0]

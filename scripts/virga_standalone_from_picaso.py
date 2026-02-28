@@ -1,3 +1,4 @@
+# %%
 import pickle as pkl
 import os
 import sys
@@ -33,39 +34,35 @@ fsed = 2
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
-cloudmode = sys.argv[1]
-grav = int(sys.argv[2])
-teff = int(sys.argv[3])
-try:
-    semi_major = float(sys.argv[4])
-except IndexError:
-    semi_major = np.inf
-
-print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
-fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}"
-fname = os.path.join(picaso_path, f"data/bd_fixed_2602/{fname_stem}.pkl")
+cloudmode = "fixed"
+grav = 316
+teff = 900
+semi_major = np.inf
 
 cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
 cl_run.effective_temp(teff) # input effective temperature
 opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
 
-if semi_major < np.inf:
-    cl_run.star(opacity_ck, filename="data/solspec_picaso.dat", w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=1.0, radius_unit=u.R_sun)
-
 nlevel = 91 # number of plane-parallel levels in your code
 rfacv = 0.5
 
 # sonora_df = pd.read_csv(f"reference/sonora_grids/diamondback/t{teff}g{grav}f{fsed}_m0.0_co1.0.pt", sep=r"\s+", skiprows=[1])
-sonora_df = pd.read_csv(f"reference/sonora_grids/diamondback/t900g{grav}f{fsed}_m0.0_co1.0.pt", sep=r"\s+", skiprows=[1])
 pressure_grid = np.logspace(-5, 3, nlevel)
 temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
 
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
 cl_run.inputs['climate']['cloudy'] = 'fixed'
 cl_run.initialize_climate(opacity_ck, save_all_profiles=True, with_spec=True)
-cl_run.virga(condensates=cloud_species, directory="/Users/adityasengupta/virga/refrind", runmode=cloudmode, mh=1, fsed=fsed, latent_heat=True)
-out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True,with_spec=True)
-jpi.diagnostic_plot(out_fixed, cl_run, opacity_ck, os.path.join(picaso_path, f"figures/bd_fixed_figures/{fname_stem}.png"), temp_guess=temp_guess)
-pkl.dump(out_fixed, open(fname, 'wb'))
-                
+
+# %%
+# you *can* run virga to get your cloud opacities
+# but you're not required to;
+# you can also provide inputs for these arrays from some other source
+v_out = cl_run.virga(condensates=cloud_species, directory="/Users/adityasengupta/virga/refrind", mh=1, fsed=fsed, latent_heat=True)
+cl_run.CloudParameters.OPD[:,:,0] = v_out["opd_per_layer"]
+cl_run.CloudParameters.W0[:,:,0] = v_out["single_scattering"]
+cl_run.CloudParameters.G0[:,:,0] = v_out["asymmetry"]
+
+cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
+# %%

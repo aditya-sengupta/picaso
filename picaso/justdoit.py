@@ -1,7 +1,8 @@
 from .atmsetup import ATMSETUP
 from .fluxes import get_reflected_1d, get_reflected_3d , get_thermal_1d, get_thermal_3d, get_reflected_SH, get_thermal_SH,get_transit_1d, tidal_flux
 
-from .climate import namedtuple,run_chemeq_climate_workflow,run_diseq_climate_workflow
+from .calculate_atm import calculate_atm
+from .climate import namedtuple,run_chemeq_climate_workflow,run_diseq_climate_workflow, update_kzz
 from .wavelength import get_cld_input_grid
 from .optics import RetrieveOpacities,compute_opacity,RetrieveCKs
 from .disco import get_angles_1d, get_angles_3d, compute_disco, compress_disco, compress_thermal
@@ -1728,9 +1729,8 @@ class inputs():
         self.inputs['climate']['grad'] = np.array(cp_grad['adiabat_grad'])
         #log Cp (erg/g/K);Specific heat at constant pressure for the same H/He 
         self.inputs['climate']['cp'] = np.array(cp_grad['specific_heat'])
-
-
-    
+        self.climate_initialized = False
+        self.climate_initialization_parameters = []
 
     def setup_nostar(self):
         """
@@ -4249,7 +4249,7 @@ class inputs():
             self.inputs['clouds']['fthin_cld'] = fthin_cld
 
 
-    def virga(self, condensates, directory, runmode="selfconsistent",
+    def virga(self, condensates, directory,
         fsed=1, b=1, eps=1e-2, param='const', 
         mh=1, mmw=2.2, kz_min=1e5, sig=2,
         Teff=None, alpha_pressure=None, supsat=0,
@@ -4325,7 +4325,6 @@ class inputs():
         """
         #stages inputs for cloudy run and also get kwargs for clouds function which we run at the end of this 
         clouds_kwargs=dict(do_holes=do_holes,fhole=fhole,fthin_cld=fthin_cld)
-        self.inputs['climate']['cloudy'] = runmode
         self.inputs['clouds']['do_holes']=do_holes
         self.inputs['clouds']['fhole']=fhole
         self.inputs['clouds']['fthin_cld']=fthin_cld
@@ -4335,7 +4334,6 @@ class inputs():
             and ('climate' in self.inputs['calculation'])):
             #if there is no temprature and a user has specified clouds, then assume this is just a setup inputs function 
             #and the user does not want an actual run
-            # dinosaur
             run=False
         else: 
             run=True 
@@ -4343,7 +4341,7 @@ class inputs():
         #if this is a climate run lets make sure we have all the right inputs set 
         if 'climate' in self.inputs['calculation']:
             #here are all the virga kwargs 
-            virga_kwargs = dict(runmode=runmode, patchy_do_holes=do_holes, patchy_fthin_cld=fthin_cld,patchy_fhole=fhole,
+            virga_kwargs = dict(patchy_do_holes=do_holes, patchy_fthin_cld=fthin_cld,patchy_fhole=fhole,
                             condensates=condensates, directory=directory,
                             fsed=fsed, b=b, eps=eps, param=param, 
                             mh=mh, mmw=mmw, kz_min=kz_min, sig=sig,
@@ -4978,33 +4976,9 @@ class inputs():
         self.inputs['climate']['injection_scaleheight'] = injection_scalehight
         self.inputs['climate']['inject_beam'] = inject_beam
         self.inputs['climate']['beam_profile'] = beam_profile
-    
-    def climate(self, opacityclass, save_all_profiles = False, with_spec=False,
-        save_all_kzz = False, diseq_chem = False, self_consistent_kzz =True
-        ,verbose=True):#,
-        #chemeq_first=True
-       #deprecate: on_fly=False,gases_fly=None, as_dict=True, kz = None, 
-        """
-        Top Function to run the Climate Model
 
-        Parameters
-        -----------
-        opacityclass : class
-            Opacity class from `justdoit.opannection`
-        save_all_profiles : bool or str
-            If you want to save and return all iterations in the T(P) profile, True/False.
-            If str, specifies a path to which all iterations are written as an HDF5 file.
-        with_spec : bool 
-            Runs picaso spectrum at the end to get the full converged outputs, Default=False
-        save_all_kzz : bool
-            If you want to save and return all iterations in the kzz profile,True/False
-        diseq_chem : bool
-            If you want to run `on-the-fly' mixing (takes longer),True/False
-        self_consistent_kzz : bool
-            If you want to run MLT in convective zones and Moses in the radiative zones
-        verbose : bool  
-            If True, triggers prints throughout code 
-        """
+    def initialize_climate(self, opacityclass, save_all_profiles = False, with_spec=False,save_all_kzz = False, diseq_chem = False, self_consistent_kzz =True ,verbose=True):
+        # Aditya - some of these kwargs may not be necessary and can just be kwargs to climate.
         #save to user 
         all_out = {}
         
@@ -5135,7 +5109,7 @@ class inputs():
         #DO I NEED A KZZ? 
         need_kzz = cloudy != "cloudless" or diseq_chem 
         if need_kzz: 
-            #lets initiative a separate place to store this 
+            #lets initiative a separate place to store this
             self.inputs['atmosphere']['kzz']={}
 
             if not self_consistent_kzz:
@@ -5146,7 +5120,13 @@ class inputs():
                     self.inputs['atmosphere']['kzz']['constant_kzz'] = kzz.values
             else: 
                     self.inputs['atmosphere']['kzz']['sc_kzz'] = 0 #placeholder
-
+        if cloudy == "fixed":
+            # if you're doing a fixed cloud run, you need to actually compute kzz now
+            self.premix_atmosphere(opacityclass, verbose=verbose)
+            OpacityWEd, OpacityNoEd,ScatteringPhase,Disco,Atmosphere, return_opa_holes = calculate_atm(self, opacityclass)
+            kzz = update_kzz(grav, tidal, AdiabatBundle, nstr, Atmosphere, OpacityWEd, OpacityNoEd, ScatteringPhase, Disco, Opagrid, F0PI, moist=moist)
+            self.inputs['atmosphere']['profile']['kz'] = kzz
+            # Aditya - problem that I need to deal with later: passing hole kwargs in here. Needs me to reorder things a bit.
 
         #virga inputs 
         virga_kwargs = self.inputs['climate'].get('virga_kwargs',{})
@@ -5157,7 +5137,7 @@ class inputs():
         #fthin_cld = self.inputs['climate']['fthin_cld']
 
         # check the dimensions of the mieff grid  
-        if cloudy != "cloudless":
+        if cloudy == "selfconsistent":
             mieff_dir = virga_kwargs.get('directory',None)
             if mieff_dir is None:
                 raise Exception('Need to specify directory for cloudy runs via Virga function')
@@ -5188,17 +5168,47 @@ class inputs():
                                       +[i[0] for i in virga_specific]
                                       +[i[0] for i in hole_specific])
         #this adds the cloud params that are always needed plus the virga kwargs, if they are used 
-        CloudParameters=CloudParametersT(*([cloudy, opd_cld_climate,g0_cld_climate,w0_cld_climate,None]
+        self.CloudParameters=CloudParametersT(*([cloudy, opd_cld_climate,g0_cld_climate,w0_cld_climate,None]
                                         +[i[1] for i in virga_specific]
                                         +[i[1] for i in hole_specific]))
 
         if verbose:
             self.interpret_run()
 
+        self.climate_initialized = True
+        self.climate_initialization_parameters = [nofczns, nstr, TEMP1, pressure, AdiabatBundle, grav, rfaci, rfacv, tidal, Opagrid, self.CloudParameters, save_profile,all_profiles, all_opd, moist, save_all_kzz]
+    
+    def climate(self, opacityclass, save_all_profiles=False, with_spec=False, all_kzz=False, diseq_chem=False, self_consistent_kzz =True, verbose=True):
+        """
+        Top Function to run the Climate Model
+
+        Parameters
+        -----------
+        opacityclass : class
+            Opacity class from `justdoit.opannection`
+        save_all_profiles : bool or str
+            If you want to save and return all iterations in the T(P) profile, True/False.
+            If str, specifies a path to which all iterations are written as an HDF5 file.
+        with_spec : bool 
+            Runs picaso spectrum at the end to get the full converged outputs, Default=False
+        save_all_kzz : bool
+            If you want to save and return all iterations in the kzz profile,True/False
+        diseq_chem : bool
+            If you want to run `on-the-fly' mixing (takes longer),True/False
+        self_consistent_kzz : bool
+            If you want to run MLT in convective zones and Moses in the radiative zones
+        verbose : bool  
+            If True, triggers prints throughout code 
+        """
+        if not self.climate_initialized:
+            nofczns, nstr, TEMP1, pressure, AdiabatBundle, grav, rfaci, rfacv, tidal, Opagrid, CloudParameters, save_profile,all_profiles, all_opd, moist, save_all_kzz = self.initialize_climate(opacityclass, save_all_profiles, with_spec, all_kzz, diseq_chem, self_consistent_kzz, verbose)
+        else:
+            nofczns, nstr, TEMP1, pressure, AdiabatBundle, grav, rfaci, rfacv, tidal, Opagrid, CloudParameters, save_profile,all_profiles, all_opd, moist, save_all_kzz = self.climate_initialization_parameters
+
         chem_workflow = None
         if not diseq_chem:
             chem_workflow = run_chemeq_climate_workflow
-        if diseq_chem:
+        else:
             chem_workflow = run_diseq_climate_workflow
 
         final_conv_flag, pressure, temp, dtdp, nstr_new, flux_net_ir_final, flux_net_v_final, flux_plus_final,   \
@@ -5258,7 +5268,10 @@ class inputs():
             df_spec = self.spectrum(opacityclass,full_output=True,calculation='thermal')    
             all_out['spectrum_output'] = df_spec 
 
-        #suggest retiring this and always returning dict 
+        #suggest retiring this and always returning dict
+        self.climate_initialized = False
+        self.climate_initialization_parameters = []
+        # if the user reuses this object and changes parameters in between, we don't want to skip the initialization
         return all_out
 
 

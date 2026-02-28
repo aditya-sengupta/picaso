@@ -56,3 +56,5 @@ grp/*
 reference/*
 
 *.png
+*.pdf
+*.zip
