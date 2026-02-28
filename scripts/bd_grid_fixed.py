@@ -16,6 +16,7 @@ from datetime import datetime
 
 sys.path.append(".")
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
+from diagnostic_plot import diagnostic_plot
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 picaso_path = os.path.dirname(picaso.__path__[0])
@@ -42,7 +43,7 @@ except IndexError:
     semi_major = np.inf
 
 print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
-fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}"
+fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}_refactor260227"
 fname = os.path.join(picaso_path, f"data/bd_fixed_2602/{fname_stem}.pkl")
 
 cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
@@ -62,10 +63,13 @@ pressure_grid = np.logspace(-5, 3, nlevel)
 temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
 
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
-cl_run.inputs['climate']['cloudy'] = 'fixed'
-cl_run.initialize_climate(opacity_ck, save_all_profiles=True, with_spec=True)
-cl_run.virga(condensates=cloud_species, directory="/Users/adityasengupta/virga/refrind", runmode=cloudmode, mh=1, fsed=fsed, latent_heat=True)
-out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True,with_spec=True)
-jpi.diagnostic_plot(out_fixed, cl_run, opacity_ck, os.path.join(picaso_path, f"figures/bd_fixed_figures/{fname_stem}.png"), temp_guess=temp_guess)
+kz = np.ones_like(pressure_grid) * 1e10
+virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
+virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
+cl_run.fix_virga_clouds(v_out)
+out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
+diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=os.path.join(picaso_path, f"figures/bd_fixed_figures/{fname_stem}.png"), temp_guess=temp_guess)
 pkl.dump(out_fixed, open(fname, 'wb'))
                 
