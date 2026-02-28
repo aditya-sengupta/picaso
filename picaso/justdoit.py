@@ -5256,6 +5256,10 @@ class inputs():
             all_out['cld_df'] = df_cld
             all_out['virga_output'] = cld_out
             #all_out['cld_output_final'] = df_cld_final
+        elif cloudy == "fixed":
+            all_out['fixed_opd'] = self.fixed_opd
+            all_out['fixed_g0'] = self.fixed_g0
+            all_out['fixed_w0'] = self.fixed_w0
 
         if save_all_profiles: 
             all_out['all_profiles'] = all_profiles 

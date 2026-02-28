@@ -38,7 +38,7 @@ use_diamondback_cloud = True
 # effective^4 = equilibrium^4 + intrinsic^4
 
 if len(sys.argv) < 3:
-    cloudmode, grav, teff, semi_major = "fixed", 3160, 600, 0.06
+    cloudmode, grav, teff, semi_major = "fixed", 316, 600, 0.06
 else:
     cloudmode = sys.argv[1]
     grav = int(sys.argv[2])
@@ -86,10 +86,19 @@ if semi_major < np.inf or not use_diamondback_cloud:
     virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
     v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
 cl_run.fix_virga_clouds(v_out)
+# %%
+pre_fixed_plot(pressure_grid, temp_guess, v_out)
 
 # %%
-out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
-diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=os.path.join(picaso_path, f"figures/bd_fixed_figures_260227_refactor/{fname_stem}.png"), temp_guess=temp_guess)
-pkl.dump(out_fixed, open(fname, 'wb'))
-                
+semi_majors = np.arange(0.02, 0.11, 0.02)
+colormap = cm.winter(np.linspace(0, 1, len(semi_majors)))
+pressure_grid = np.logspace(-5, 3, nlevel)
+for (color, semi_major) in zip(colormap, semi_majors):
+    temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
+    plt.semilogy(temp_guess, pressure_grid, label=semi_major, color=color)
+plt.gca().invert_yaxis()
+plt.xlabel("Temperature (K)")
+plt.ylabel("Pressure (bar)")
+plt.legend()
+
 # %%

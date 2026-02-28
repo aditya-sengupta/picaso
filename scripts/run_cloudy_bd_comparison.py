@@ -20,7 +20,7 @@ from load_diamondback import read_diamondback_cloud_structure, read_diamondback_
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
 from diagnostic_plot import pre_fixed_plot, diagnostic_plot
 
-cloud_species = ["MgSiO3"]#, "Mg2SiO4", "Fe", "Al2O3"]
+cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 picaso_path = os.path.dirname(picaso.__path__[0])
 
 #1 ck tables from roxana
@@ -35,32 +35,25 @@ nstr_upper = 88
 fsed = 2
 use_diamondback_cloud = True
 
-# effective^4 = equilibrium^4 + intrinsic^4
-
-if len(sys.argv) < 3:
-    cloudmode, grav, teff, semi_major = "fixed", 3160, 600, 0.06
-else:
-    cloudmode = sys.argv[1]
-    grav = int(sys.argv[2])
-    teff = int(sys.argv[3])
-    if len(sys.argv) < 4:
-        semi_major = np.inf
-    else:
-        semi_major = float(sys.argv[4])
+# Fixed parameters for this diagnostic case
+cloudmode = "fixed"
+grav = 3160
+teff = 200
+semi_major = 0.08
 
 print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, fsed = {fsed}, semimajor axis = {semi_major} au")
-fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}"
+fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}_comparison"
 fname = os.path.join(picaso_path, f"data/bd_fixed_2602/{fname_stem}.pkl")
 
-cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
-cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
-cl_run.effective_temp(teff) # input effective temperature
-opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
+cl_run = jdi.inputs(calculation="browndwarf", climate = True)
+cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+cl_run.effective_temp(teff)
+opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted')
 
 if semi_major < np.inf:
     cl_run.star(opacity_ck, filename=os.path.join(picaso_path, "data/solspec_picaso.dat"), w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=1.0, radius_unit=u.R_sun)
 
-nlevel = 91 # number of plane-parallel levels in your code
+nlevel = 91
 rfacv = 0.0
 
 if semi_major < np.inf:

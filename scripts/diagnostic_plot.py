@@ -4,17 +4,43 @@ from picaso.justplotit import pt_adiabat
 import virga.justdoit as vj
 from picaso.justplotit import brightness_temperature
 
+cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
+
+def pre_fixed_plot(pressure, temperature, virga_out):
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    
+    for (i, condensible) in enumerate(virga_out["condensibles"]):
+        axes[0].loglog(virga_out["condensate_mmr"][:,i], virga_out["pressure"], label=condensible, color=cloud_colors[i])
+        axes[0].set_xlim((1e-10, 2 * np.max(virga_out["condensate_mmr"])))
+        axes[0].set_ylim((np.min(pressure), np.max(pressure)))
+        axes[0].set_xlabel("Condensate mass mixing ratio")
+        axes[0].set_ylabel("Pressure (bar)")
+        axes[0].invert_yaxis()
+        axes[0].legend()
+
+    axes[1].semilogy(temperature, pressure, ls="--", c='b', label="guess")
+    axes[1].set_xlim((0, np.max(temperature)))
+    axes[1].set_ylim((np.min(pressure), np.max(pressure)))
+    if "condensibles" in virga_out.keys():
+        condensibles = virga_out["condensibles"]
+    else:
+        condensibles = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
+    for (gas, c) in zip(condensibles, cloud_colors):
+        _, condt = vj.condensation_t(gas, 1, 2.2, pressure)
+        axes[1].semilogy(condt, pressure, ls="--", label=gas, color=c)
+    axes[1].set_xlabel("Temperature (K)")
+    axes[1].invert_yaxis()
+    axes[1].legend()
+
 def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_guess=None):
     if virga_out is None and "virga_output" in out.keys():
         virga_out = out["virga_output"]
     _, grad, _ = pt_adiabat(out, cl_run, opacity_ck, plot=False)
     fig, axes = plt.subplots(3, 2, figsize=(9, 12))
-    plt.suptitle(fname)
+    plt.suptitle(fname.split("/")[-1])
 
     layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
     N = len(out["pressure"])
-
-    cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
         
     if virga_out is not None and all([x in virga_out.keys() for x in ["condensibles", "condensate_mmr"]]):
         for (i, condensible) in enumerate(virga_out["condensibles"]):
@@ -32,10 +58,12 @@ def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_gu
     else:
         convective_boundary = cvz_locs[1]
     axes[0, 1].semilogy(out["temperature"], out["pressure"], label="solution")
+    max_temp = np.max(out["temperature"])
     if temp_guess is not None:
         axes[0, 1].semilogy(temp_guess, out["pressure"], ls="--", c='b', label="guess")
-    axes[0, 1].set_xlim((0, np.max(out["temperature"])))
-    axes[0, 1].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
+        max_temp = max(max_temp, np.max(temp_guess))
+    axes[0, 1].set_xlim((0, max_temp * 1.1))
+    axes[0, 1].set_ylim((np.min(out["pressure"]) * 0.9, np.max(out["pressure"]) * 1.1))
     axes[0, 1].scatter([out["temperature"][convective_boundary]], [out["pressure"][convective_boundary]], c="k")
     if "condensibles" in virga_out.keys():
         condensibles = virga_out["condensibles"]
