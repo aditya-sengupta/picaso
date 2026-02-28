@@ -19,14 +19,15 @@ def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_gu
 
     cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
         
-    for (i, condensible) in enumerate(virga_out["condensibles"]):
-        axes[0, 0].loglog(virga_out["condensate_mmr"][:,i], virga_out["pressure"], label=condensible, color=cloud_colors[i])
-    axes[0, 0].set_xlim((1e-10, 2 * np.max(virga_out["condensate_mmr"])))
-    axes[0, 0].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
-    axes[0, 0].set_xlabel("Condensate mass mixing ratio")
-    axes[0, 0].set_ylabel("Pressure (bar)")
-    axes[0, 0].invert_yaxis()
-    axes[0, 0].legend()
+    if virga_out is not None and all([x in virga_out.keys() for x in ["condensibles", "condensate_mmr"]]):
+        for (i, condensible) in enumerate(virga_out["condensibles"]):
+            axes[0, 0].loglog(virga_out["condensate_mmr"][:,i], virga_out["pressure"], label=condensible, color=cloud_colors[i])
+        axes[0, 0].set_xlim((1e-10, 2 * np.max(virga_out["condensate_mmr"])))
+        axes[0, 0].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
+        axes[0, 0].set_xlabel("Condensate mass mixing ratio")
+        axes[0, 0].set_ylabel("Pressure (bar)")
+        axes[0, 0].invert_yaxis()
+        axes[0, 0].legend()
 
     cvz_locs = out["cvz_locs"]
     if cvz_locs[-2] > 0 and cvz_locs[2] != 89:
@@ -39,7 +40,11 @@ def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_gu
     axes[0, 1].set_xlim((0, np.max(out["temperature"])))
     axes[0, 1].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
     axes[0, 1].scatter([out["temperature"][convective_boundary]], [out["pressure"][convective_boundary]], c="k")
-    for (gas, c) in zip(virga_out["condensibles"], cloud_colors):
+    if "condensibles" in virga_out.keys():
+        condensibles = virga_out["condensibles"]
+    else:
+        condensibles = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
+    for (gas, c) in zip(condensibles, cloud_colors):
         _, condt = vj.condensation_t(gas, 1, 2.2, out["pressure"])
         axes[0, 1].semilogy(condt, out["pressure"], ls="--", label=gas, color=c)
     axes[0, 1].set_xlabel("Temperature (K)")
@@ -60,11 +65,12 @@ def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_gu
     axes[1, 1].set_xlabel("Wavelength (micron)")
     axes[1, 1].set_ylabel("Brightness temperature (K)")
     
-    axes[2, 0].loglog(virga_out["opd_per_layer"][:,55], layer_p)
-    axes[2, 0].invert_yaxis()
-    axes[2, 0].set_xlim((1e-10, 2 * np.max(out["all_opd"][-(N-1):])))
-    axes[2, 0].set_xlabel("Optical depth")
-    axes[2, 0].set_ylabel("Pressure (bar)")
+    if virga_out is not None and "opd_per_layer" in virga_out.keys():
+        axes[2, 0].loglog(virga_out["opd_per_layer"][:,55], layer_p)
+        axes[2, 0].invert_yaxis()
+        axes[2, 0].set_xlim((1e-10, 2 * np.max(out["all_opd"][-(N-1):])))
+        axes[2, 0].set_xlabel("Optical depth")
+        axes[2, 0].set_ylabel("Pressure (bar)")
 
     axes[2, 1].semilogy(out["dtdp"], layer_p)
     axes[2, 1].semilogy(grad, layer_p)

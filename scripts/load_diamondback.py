@@ -19,7 +19,7 @@ def readInFile(filename):
 			line='xxx xxx'
 	return filelines
 
-def read_diamondback_clouds(teff, grav_ms2, fsed):
+def read_diamondback_cloud_structure(teff, grav_ms2, fsed):
     all_lines = readInFile(path.join(diamondback_datapath, f"diamondback_allmodels/t{teff}g{grav_ms2}f{fsed}_m0.0_co1.0.out"))
     dfs = []
     for (i, line) in enumerate(all_lines):
@@ -34,3 +34,8 @@ def read_diamondback_clouds(teff, grav_ms2, fsed):
     df = reduce(lambda x, y: pd.merge(x, y[y.columns.difference(x.columns)], left_index=True, right_index=True), dfs)
     return df.rename(columns={"P(bar)": "pressure", "T(K)": "temperature", "kz(cm^2/s)": "kz"})
 
+def read_diamondback_optical_properties(teff, grav_ms2, fsed):
+    cld_file = path.join(diamondback_datapath, f"diamondback_alloutputs/t{teff}g{grav_ms2}f{fsed}_m0.0_co1.0.cld")
+    df = pd.read_csv(cld_file, sep=r"\s+", header=None,
+                      names=["level", "spectral_window", "tau", "g0", "w0", "sigma"])
+    return df

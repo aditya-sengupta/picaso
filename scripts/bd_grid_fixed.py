@@ -15,7 +15,7 @@ from copy import deepcopy
 from datetime import datetime
 
 sys.path.append(".")
-from load_diamondback import read_diamondback_clouds
+from load_diamondback import read_diamondback_cloud_structure, read_diamondback_optical_properties
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
 from diagnostic_plot import diagnostic_plot
 
@@ -30,8 +30,9 @@ ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f's
 
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat', 'structures_m+0.0')
 
-nstr_upper = 88
+nstr_upper = 79
 fsed = 2
+use_diamondback_cloud = True
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
@@ -63,17 +64,25 @@ if semi_major < np.inf:
     temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
     kz = np.ones_like(pressure_grid) * 1e10
 else:
-    df = read_diamondback_clouds(teff, grav, fsed)
-    pressure_grid = np.array(df['pressure'])
-    temp_guess = np.array(df['temperature'])
-    kz = np.array(df['kz'])
-    
+    df_cloud = read_diamondback_cloud_structure(teff, grav, fsed)
+    sonora_df = pd.read_csv(f"reference/sonora_grids/diamondback/t{teff}g{grav}f{fsed}_m0.0_co1.0.pt", sep=r"\s+", skiprows=[1])
+    pressure_grid = np.array(sonora_df["P"])
+    temp_guess = np.array(sonora_df["T"])
+    kz = np.array(df_cloud['kz'])
+    if use_diamondback_cloud:
+        diamondback_optical_properties = read_diamondback_optical_properties(teff, grav, fsed)
+        v_out = {}
+        for (k, kv) in zip(['tau', 'g0', 'w0'], ["opd_per_layer", 'asymmetry', 'single_scattering']):
+            v_out[kv] = np.array(diamondback_optical_properties[k]).reshape((90,196))
+        
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
-virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
-virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
-virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
-v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
+if semi_major < np.inf or not use_diamondback_cloud:
+    virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
+    virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+    virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+    v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
 cl_run.fix_virga_clouds(v_out)
+
 out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
 diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=os.path.join(picaso_path, f"figures/bd_fixed_figures/{fname_stem}.png"), temp_guess=temp_guess)
 pkl.dump(out_fixed, open(fname, 'wb'))
