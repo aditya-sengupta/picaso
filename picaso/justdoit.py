@@ -2331,6 +2331,14 @@ class inputs():
         kzz_dict = self.inputs['atmosphere'].get('kzz',self.inputs['atmosphere']['profile'])
         kz = kzz_dict.get('constant_kzz', kzz_dict.get('sc_kzz', kzz_dict.get('kz',None)))
         return np.array(kz)
+
+    def fix_clouds(self, opd, g0, w0):
+        self.CloudParameters.OPD[:,:,0] = opd
+        self.CloudParameters.G0[:,:,0] = g0
+        self.CloudParameters.W0[:,:,0] = w0
+
+    def fix_virga_clouds(self, virga_out):
+        self.fix_clouds(virga_out["opd_per_layer"], virga_out["asymmetry"], virga_out["single_scattering"])
     
     def adjust_quench_chemistry(self, quench_levels,chemistry_table=None):
         """
@@ -5224,6 +5232,7 @@ class inputs():
                 verbose=verbose, moist = moist,
                 save_kzz=save_all_kzz, self_consistent_kzz=self_consistent_kzz)
 
+        all_out = {}
         #all output to user
         all_out['pressure'] = pressure
         all_out['temperature'] = temp
@@ -5242,7 +5251,7 @@ class inputs():
 
 
         #put cld output in all_out
-        if cloudy != "cloudless":
+        if self.CloudParameters.cloudy == "selfconsistent":
             df_cld = vj.picaso_format(cld_out['opd_per_layer'],cld_out['single_scattering'],cld_out['asymmetry'], 
                                       pressure = cld_out['pressure'], wavenumber=1e4/cld_out['wave'])
             all_out['cld_df'] = df_cld
@@ -5260,7 +5269,7 @@ class inputs():
                                         no_ph3 = self.inputs['approx']['chem_params']['no_ph3'],
                                         cold_trap = self.inputs['approx']['chem_params']['cold_trap'], 
                                         vol_rainout= self.inputs['approx']['chem_params']['vol_rainout'])
-            if cloudy != "cloudless":
+            if self.CloudParameters.cloudy == "selfconsistent":
                 cld_kwargs =dict( do_holes=virga_kwargs.get('patchy_do_holes',False), 
                                   fhole = virga_kwargs.get('patchy_fhole',0),
                                   fthin_cld = virga_kwargs.get('patchy_fthin_cld',0))
@@ -5268,7 +5277,6 @@ class inputs():
             df_spec = self.spectrum(opacityclass,full_output=True,calculation='thermal')    
             all_out['spectrum_output'] = df_spec 
 
-        #suggest retiring this and always returning dict
         self.climate_initialized = False
         self.climate_initialization_parameters = []
         # if the user reuses this object and changes parameters in between, we don't want to skip the initialization

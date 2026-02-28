@@ -29,7 +29,7 @@ ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f's
 
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat', 'structures_m+0.0')
 
-nstr_upper = 88
+nstr_upper = 63
 fsed = 2
 
 # effective^4 = equilibrium^4 + intrinsic^4
@@ -59,10 +59,47 @@ cl_run.initialize_climate(opacity_ck, save_all_profiles=True, with_spec=True)
 # you *can* run virga to get your cloud opacities
 # but you're not required to;
 # you can also provide inputs for these arrays from some other source
-v_out = cl_run.virga(condensates=cloud_species, directory="/Users/adityasengupta/virga/refrind", mh=1, fsed=fsed, latent_heat=True)
-cl_run.CloudParameters.OPD[:,:,0] = v_out["opd_per_layer"]
-cl_run.CloudParameters.W0[:,:,0] = v_out["single_scattering"]
-cl_run.CloudParameters.G0[:,:,0] = v_out["asymmetry"]
+import virga.justdoit as vj
+kz = np.ones_like(pressure_grid) * 1e10 #
 
-cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
+virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
+virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
+cl_run.fix_virga_clouds(v_out)
+# cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
+# %%
+# I could've made this way simpler if I had just called virga directly!
+import virga.justdoit as vj
+kz = np.ones_like(pressure_grid) * 1e10 #
+
+virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
+virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+virga_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
+# %%
+fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+
+# Plot virga_out
+for (i, species) in enumerate(cloud_species):
+    axes[0].loglog(virga_out["opd_by_gas"][:,i], virga_out["pressure"], label=species)
+axes[0].set_xlabel('Optical Depth')
+axes[0].set_ylabel('Pressure (bar)')
+axes[0].set_title('Virga Direct')
+axes[0].set_xlim((1e-10, 1e5))
+axes[0].legend()
+axes[0].invert_yaxis()
+
+# Plot v_out
+for (i, species) in enumerate(cloud_species):
+    axes[1].loglog(v_out["opd_by_gas"][:,i], v_out["pressure"], label=species)
+axes[1].set_xlabel('Optical Depth')
+axes[1].set_ylabel('Pressure (bar)')
+axes[1].set_title('Virga via PICASO call')
+axes[1].set_xlim((1e-10, 1e5))
+axes[1].legend()
+axes[1].invert_yaxis()
+
+plt.tight_layout()
+plt.show()
 # %%
