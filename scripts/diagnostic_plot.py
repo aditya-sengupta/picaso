@@ -9,10 +9,7 @@ def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_gu
         virga_out = out["virga_output"]
     _, grad, _ = pt_adiabat(out, cl_run, opacity_ck, plot=False)
     fig, axes = plt.subplots(3, 2, figsize=(9, 12))
-    t = f"Teff = {cl_run.inputs['planet']['T_eff']}, g = {cl_run.inputs['planet']['gravity'] / 100}, cloud = {cl_run.inputs['climate']['cloudy']}"
-    if 'virga_kwargs' in cl_run.inputs['climate'].keys():
-        t += f", fsed = {cl_run.inputs['climate']['virga_kwargs']['fsed']}"
-    plt.suptitle(t)
+    plt.suptitle(fname)
 
     layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
     N = len(out["pressure"])

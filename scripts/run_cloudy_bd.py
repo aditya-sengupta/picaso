@@ -1,3 +1,4 @@
+# %%
 import pickle as pkl
 import os
 import sys
@@ -30,22 +31,25 @@ ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f's
 
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat', 'structures_m+0.0')
 
-nstr_upper = 79
-fsed = 8
+nstr_upper = 88
+fsed = 2
 use_diamondback_cloud = True
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
-cloudmode = sys.argv[1]
-grav = int(sys.argv[2])
-teff = int(sys.argv[3])
-try:
-    semi_major = float(sys.argv[4])
-except IndexError:
-    semi_major = np.inf
+if len(sys.argv) < 3:
+    cloudmode, grav, teff, semi_major = "fixed", 316, 200, 0.06
+else:
+    cloudmode = sys.argv[1]
+    grav = int(sys.argv[2])
+    teff = int(sys.argv[3])
+    if len(sys.argv) < 4:
+        semi_major = np.inf
+    else:
+        semi_major = float(sys.argv[4])
 
-print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
-fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}_refactor260227"
+print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, fsed = {fsed}, semimajor axis = {semi_major} au")
+fname_stem = f"bd_cloudmode{cloudmode}_fsed{fsed}_teff{teff}_grav{grav}_semimajor{semi_major}"
 fname = os.path.join(picaso_path, f"data/bd_fixed_2602/{fname_stem}.pkl")
 
 cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
@@ -54,7 +58,7 @@ cl_run.effective_temp(teff) # input effective temperature
 opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
 
 if semi_major < np.inf:
-    cl_run.star(opacity_ck, filename="data/solspec_picaso.dat", w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=1.0, radius_unit=u.R_sun)
+    cl_run.star(opacity_ck, filename=os.path.join(picaso_path, "data/solspec_picaso.dat"), w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=1.0, radius_unit=u.R_sun)
 
 nlevel = 91 # number of plane-parallel levels in your code
 rfacv = 0.0
@@ -83,7 +87,9 @@ if semi_major < np.inf or not use_diamondback_cloud:
     v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
 cl_run.fix_virga_clouds(v_out)
 
+# %%
 out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
-diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=os.path.join(picaso_path, f"figures/bd_fixed_figures/{fname_stem}.png"), temp_guess=temp_guess)
+diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=os.path.join(picaso_path, f"figures/bd_fixed_figures_260227_refactor/{fname_stem}.png"), temp_guess=temp_guess)
 pkl.dump(out_fixed, open(fname, 'wb'))
                 
+# %%
