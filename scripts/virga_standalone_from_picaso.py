@@ -52,54 +52,16 @@ pressure_grid = np.logspace(-5, 3, nlevel)
 temp_guess = kazumasa_hj_grid_interpolation(0, semi_major, teff, grav, pressure_grid=pressure_grid)
 
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
-cl_run.inputs['climate']['cloudy'] = 'fixed'
-cl_run.initialize_climate(opacity_ck, save_all_profiles=True, with_spec=True)
 
-# %%
 # you *can* run virga to get your cloud opacities
 # but you're not required to;
 # you can also provide inputs for these arrays from some other source
 import virga.justdoit as vj
-kz = np.ones_like(pressure_grid) * 1e10 #
+kz = np.ones_like(pressure_grid) * 1e10
 
 virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
 virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
 virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
 v_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
 cl_run.fix_virga_clouds(v_out)
-# cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
-# %%
-# I could've made this way simpler if I had just called virga directly!
-import virga.justdoit as vj
-kz = np.ones_like(pressure_grid) * 1e10 #
-
-virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
-virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
-virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
-virga_out = vj.compute(virga_planet, as_dict=True, directory="/Users/adityasengupta/virga/refrind")
-# %%
-fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-
-# Plot virga_out
-for (i, species) in enumerate(cloud_species):
-    axes[0].loglog(virga_out["opd_by_gas"][:,i], virga_out["pressure"], label=species)
-axes[0].set_xlabel('Optical Depth')
-axes[0].set_ylabel('Pressure (bar)')
-axes[0].set_title('Virga Direct')
-axes[0].set_xlim((1e-10, 1e5))
-axes[0].legend()
-axes[0].invert_yaxis()
-
-# Plot v_out
-for (i, species) in enumerate(cloud_species):
-    axes[1].loglog(v_out["opd_by_gas"][:,i], v_out["pressure"], label=species)
-axes[1].set_xlabel('Optical Depth')
-axes[1].set_ylabel('Pressure (bar)')
-axes[1].set_title('Virga via PICASO call')
-axes[1].set_xlim((1e-10, 1e5))
-axes[1].legend()
-axes[1].invert_yaxis()
-
-plt.tight_layout()
-plt.show()
-# %%
+cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)

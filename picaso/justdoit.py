@@ -2336,6 +2336,7 @@ class inputs():
         self.CloudParameters.OPD[:,:,0] = opd
         self.CloudParameters.G0[:,:,0] = g0
         self.CloudParameters.W0[:,:,0] = w0
+        self.inputs["climate"]["cloudy"] = "fixed"
 
     def fix_virga_clouds(self, virga_out):
         self.fix_clouds(virga_out["opd_per_layer"], virga_out["asymmetry"], virga_out["single_scattering"])
@@ -5128,13 +5129,6 @@ class inputs():
                     self.inputs['atmosphere']['kzz']['constant_kzz'] = kzz.values
             else: 
                     self.inputs['atmosphere']['kzz']['sc_kzz'] = 0 #placeholder
-        if cloudy == "fixed":
-            # if you're doing a fixed cloud run, you need to actually compute kzz now
-            self.premix_atmosphere(opacityclass, verbose=verbose)
-            OpacityWEd, OpacityNoEd,ScatteringPhase,Disco,Atmosphere, return_opa_holes = calculate_atm(self, opacityclass)
-            kzz = update_kzz(grav, tidal, AdiabatBundle, nstr, Atmosphere, OpacityWEd, OpacityNoEd, ScatteringPhase, Disco, Opagrid, F0PI, moist=moist)
-            self.inputs['atmosphere']['profile']['kz'] = kzz
-            # Aditya - problem that I need to deal with later: passing hole kwargs in here. Needs me to reorder things a bit.
 
         #virga inputs 
         virga_kwargs = self.inputs['climate'].get('virga_kwargs',{})
