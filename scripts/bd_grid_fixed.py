@@ -31,7 +31,7 @@ ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f's
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat', 'structures_m+0.0')
 
 nstr_upper = 79
-fsed = 2
+fsed = 8
 use_diamondback_cloud = True
 
 # effective^4 = equilibrium^4 + intrinsic^4
