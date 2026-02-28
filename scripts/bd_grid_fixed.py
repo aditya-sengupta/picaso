@@ -57,7 +57,7 @@ if semi_major < np.inf:
     cl_run.star(opacity_ck, filename="data/solspec_picaso.dat", w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=1.0, radius_unit=u.R_sun)
 
 nlevel = 91 # number of plane-parallel levels in your code
-rfacv = 0.5
+rfacv = 0.0
 
 if semi_major < np.inf:
     pressure_grid = np.logspace(-5, 3, nlevel)
