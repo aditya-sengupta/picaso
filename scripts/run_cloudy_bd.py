@@ -20,7 +20,7 @@ from load_diamondback import read_diamondback_cloud_structure, read_diamondback_
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
 from diagnostic_plot import pre_fixed_plot, diagnostic_plot
 
-cloud_species = ["MgSiO3"]#, "Mg2SiO4", "Fe", "Al2O3"]
+cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 picaso_path = os.path.dirname(picaso.__path__[0])
 
 #1 ck tables from roxana
@@ -61,7 +61,7 @@ if semi_major < np.inf:
     cl_run.star(opacity_ck, filename=os.path.join(picaso_path, "data/solspec_picaso.dat"), w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=1.0, radius_unit=u.R_sun)
 
 nlevel = 91 # number of plane-parallel levels in your code
-rfacv = 0.0
+rfacv = 0.5 # irradiated fixed clouds converge horribly with this = 0 (kinda obviously if you think about it)
 
 if semi_major < np.inf:
     pressure_grid = np.logspace(-5, 3, nlevel)
@@ -89,7 +89,8 @@ cl_run.fix_virga_clouds(v_out)
 
 # %%
 out_fixed = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
-diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=os.path.join(picaso_path, f"figures/bd_fixed_figures_260227_refactor/{fname_stem}.png"), temp_guess=temp_guess)
+diagnostic_plot_path = os.path.join(picaso_path, f"figures/bd_fixed_figures_260227_refactor/{fname_stem}.png")
+diagnostic_plot(out_fixed, cl_run, opacity_ck, virga_out=v_out, fname=diagnostic_plot_path, temp_guess=temp_guess)
 pkl.dump(out_fixed, open(fname, 'wb'))
-                
+print(f"Diagnostic plot output to {diagnostic_plot_path}")
 # %%

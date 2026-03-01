@@ -1,0 +1,3 @@
+It seems like there's convergence challenges even on the old version of PICASO. This is good because it means I didn't create any correctness issues with my changes, so I've reverted PICASO to the new version.
+However, I now don't know how I got the fast-converging result that's in data/bd_fixed_2602/bd_cloudmodefixed_fsed2_teff200_grav3160_semimajor0.08_prev.pkl.
+Analyze this output and edit run_cloudy_bd_comparison.py to match it. No changes to the PICASO source should be necessary; update the scripts to match the newer API.

@@ -65,13 +65,14 @@ def diagnostic_plot(out, cl_run, opacity_ck, virga_out=None, fname=None, temp_gu
     axes[0, 1].set_xlim((0, max_temp * 1.1))
     axes[0, 1].set_ylim((np.min(out["pressure"]) * 0.9, np.max(out["pressure"]) * 1.1))
     axes[0, 1].scatter([out["temperature"][convective_boundary]], [out["pressure"][convective_boundary]], c="k")
-    if "condensibles" in virga_out.keys():
-        condensibles = virga_out["condensibles"]
-    else:
-        condensibles = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
-    for (gas, c) in zip(condensibles, cloud_colors):
-        _, condt = vj.condensation_t(gas, 1, 2.2, out["pressure"])
-        axes[0, 1].semilogy(condt, out["pressure"], ls="--", label=gas, color=c)
+    if virga_out is not None:
+        if "condensibles" in virga_out.keys():
+            condensibles = virga_out["condensibles"]
+        else:
+            condensibles = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
+        for (gas, c) in zip(condensibles, cloud_colors):
+            _, condt = vj.condensation_t(gas, 1, 2.2, out["pressure"])
+            axes[0, 1].semilogy(condt, out["pressure"], ls="--", label=gas, color=c)
     axes[0, 1].set_xlabel("Temperature (K)")
     axes[0, 1].set_ylabel("Pressure (bar)")
     axes[0, 1].invert_yaxis()
