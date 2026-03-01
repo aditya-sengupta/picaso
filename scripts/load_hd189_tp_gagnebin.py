@@ -4,13 +4,11 @@ import json
 from collections import namedtuple
 import picaso
 from picaso import justdoit as jdi
+from picaso.justplotit import pt_adiabat, brightness_temperature
 from picaso.grad import did_grad_cp
 from astropy import units as u
 __refdata__ = os.environ['picaso_refdata']
-
-import sys
-sys.path.append(".")
-from diagnostic_plot import diagnostic_plot
+# %%
 
 picaso_path = os.path.dirname(picaso.__path__[0])
 
@@ -54,8 +52,57 @@ temp_guess = np.ones((nlevel,)) * 1500
 cl_run.inputs_climate(temp_guess=np.copy(temp_guess), pressure=pressure, rcb_guess=rcb_guess, rfacv=float(rfacv))
 diagnostic_plot_path = os.path.join(picaso_path, f"figures/hd189/initial_test.png")
 out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
-
 # %%
-diagnostic_plot(out, cl_run, opacity_ck, fname=diagnostic_plot_path, temp_guess=temp_guess)
+_, grad, _ = pt_adiabat(out, cl_run, opacity_ck, plot=False)
+fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+
+layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
+N = len(out["pressure"])
+
+cvz_locs = out["cvz_locs"]
+if cvz_locs[-2] > 0 and cvz_locs[2] != 89:
+    convective_boundary = cvz_locs[-2]
+else:
+    convective_boundary = cvz_locs[1]
+axes[0, 0].semilogy(out["temperature"], out["pressure"], label="solution")
+max_temp = np.max(out["temperature"])
+axes[0, 0].semilogy(temperature, pressure, label="Anna's grid")
+max_temp = max(max_temp, np.max(temperature))
+if temp_guess is not None:
+    axes[0, 0].semilogy(temp_guess, out["pressure"], ls="--", c='b', label="guess")
+    max_temp = max(max_temp, np.max(temp_guess))
+axes[0, 0].set_xlim((0, max_temp * 1.1))
+axes[0, 0].set_ylim((np.min(out["pressure"]) * 0.9, np.max(out["pressure"]) * 1.1))
+axes[0, 0].scatter([out["temperature"][convective_boundary]], [out["pressure"][convective_boundary]], c="k")
+axes[0, 0].set_xlabel("Temperature (K)")
+axes[0, 0].set_ylabel("Pressure (bar)")
+axes[0, 0].invert_yaxis()
+axes[0, 0].legend()
+
+axes[1, 0].loglog(np.abs(out["fnet/fnetir"]), out["pressure"])
+axes[1, 0].set_xlabel("Fnet/Fnet-IR")
+axes[1, 0].set_ylabel("Pressure (bar)")
+axes[1, 0].axvline(1e-3, ls="--", color="k")
+axes[1, 0].invert_yaxis()
+
+T_B = brightness_temperature(out["spectrum_output"], plot=False)
+axes[1, 1].semilogx(1e4/out["spectrum_output"]["wavenumber"], T_B)
+axes[1, 1].invert_yaxis()
+axes[1, 1].axhline(np.max(out["temperature"]), ls="--", c='k')
+axes[1, 1].set_xlabel("Wavelength (micron)")
+axes[1, 1].set_ylabel("Brightness temperature (K)")
+
+axes[0, 1].semilogy(out["dtdp"], layer_p)
+axes[0, 1].semilogy(grad, layer_p)
+axes[0, 1].invert_yaxis()
+axes[0, 1].set_xlabel("dtdp (K/bar)")
+axes[0, 1].set_ylabel("Pressure (bar)")
+ax2 = axes[0, 1].twinx()
+ax2.set_ylabel("Layer number")
+ax2.set_yticks(np.arange(0, N-1, 10))
+ax2.set_yticklabels(np.arange(0, N-1, 10)[::-1])
+
+plt.tight_layout()    
+plt.savefig(os.path.join(picaso_path, "figures", "hd189", "initial_test.png"))
 
 # %%
