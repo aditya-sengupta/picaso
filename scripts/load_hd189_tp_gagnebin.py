@@ -16,11 +16,11 @@ picaso_path = os.path.dirname(picaso.__path__[0])
 
 tint = 200
 grav = 10 ** 1.4
-semi_major = 0.031 # au, exoplanet archive
+semi_major = 0.03126
 r_star = float(((semi_major * u.au) / 9.1) / u.R_sun)
-all_feh = ["-100", "+000", "+030", "+050", "+070", "+100"]
-all_co = ["025", "050", "100", "150", "200"]
-all_rfacv = ["0.5", "0.8", "0.65", "0.75", "0.85"]
+all_feh = ["+000"] #["-100", "+000", "+030", "+050", "+070", "+100"]
+all_co = ["100"] #["025", "050", "100", "150", "200"]
+all_rfacv = ["0.5", "0.65", "0.75", "0.8", "0.85"]
 
 cp_grad = json.load(open(os.path.join(__refdata__,'climate_INPUTS','specific_heat_p_adiabat_grad.json')))
 
@@ -44,7 +44,7 @@ for mh in all_feh:
 
             tp_file = os.path.join(picaso_path, f"hd189_tp_gagnebin/tp_feh{mh}_tint200_co{CtoO}_rfacv{rfacv}.txt")
 
-            case_label = f"feh{mh}_co{CtoO}_rfacv{rfacv}"
+            case_label = f"feh{mh}_co{CtoO}_rfacv{float(rfacv):.2f}"
             print(f"Running {case_label}...")
 
             tp = np.genfromtxt(tp_file)
@@ -59,7 +59,8 @@ for mh in all_feh:
             cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
             cl_run.effective_temp(tint)
             opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted')
-            cl_run.star(opacity_ck, filename=os.path.join(picaso_path, "data/solspec_picaso.dat"), w_unit="um", f_unit="flam", semi_major=semi_major, semi_major_unit = u.AU, radius=r_star, radius_unit=u.R_sun)
+
+            cl_run.star(opacity_ck, temp=5012.5,metal=0.03, logg=4.57, radius = r_star,database='phoenix', radius_unit=u.R_sun,semi_major=semi_major , semi_major_unit = u.AU)
 
             temp_guess = np.ones((nlevel,)) * 1500
             cl_run.inputs_climate(temp_guess=np.copy(temp_guess), pressure=pressure, rcb_guess=rcb_guess, rfacv=float(rfacv))
