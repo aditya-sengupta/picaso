@@ -1,16 +1,17 @@
-# %%
+import pickle as pkl
 import os
 import numpy as np
 import json
 import matplotlib.pyplot as plt
 from collections import namedtuple
+import warnings
+warnings.filterwarnings('ignore')
 import picaso
 from picaso import justdoit as jdi
 from picaso.justplotit import pt_adiabat, brightness_temperature
 from picaso.grad import did_grad_cp
 from astropy import units as u
 __refdata__ = os.environ['picaso_refdata']
-# %%
 
 picaso_path = os.path.dirname(picaso.__path__[0])
 
@@ -18,8 +19,8 @@ tint = 200
 grav = 10 ** 1.4
 semi_major = 0.03126
 r_star = float(((semi_major * u.au) / 9.1) / u.R_sun)
-all_feh = ["+000"] #["-100", "+000", "+030", "+050", "+070", "+100"]
-all_co = ["100"] #["025", "050", "100", "150", "200"]
+all_feh = ["-100", "+000", "+030", "+050", "+070", "+100"]
+all_co = ["025", "050", "100", "150", "200"]
 all_rfacv = ["0.5", "0.65", "0.75", "0.8", "0.85"]
 
 cp_grad = json.load(open(os.path.join(__refdata__,'climate_INPUTS','specific_heat_p_adiabat_grad.json')))
@@ -33,18 +34,21 @@ AdiabatBundle = AdiabatBundle(
 )
 nlevel = 91
 
-# %%
 for mh in all_feh:
     for CtoO in all_co:
         for rfacv in all_rfacv:
+            case_label = f"feh{mh}_co{CtoO}_rfacv{float(rfacv):.2f}"
             ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', f'sonora_2020_feh{mh}_co_{CtoO}.data.196')
+            fname = os.path.join(picaso_path, f"data/hd189/{case_label}.pkl")
             if not os.path.isdir(ck_db):
                 print(f"Skipping feh={mh} co={CtoO} rfacv={rfacv}: opacity not found")
+                continue
+            if os.path.isfile(fname):
+                print(f"Skipping feh={mh} co={CtoO} rfacv={rfacv}: run already done")
                 continue
 
             tp_file = os.path.join(picaso_path, f"hd189_tp_gagnebin/tp_feh{mh}_tint200_co{CtoO}_rfacv{rfacv}.txt")
 
-            case_label = f"feh{mh}_co{CtoO}_rfacv{float(rfacv):.2f}"
             print(f"Running {case_label}...")
 
             tp = np.genfromtxt(tp_file)
@@ -117,5 +121,7 @@ for mh in all_feh:
             plt.tight_layout()
             plt.savefig(os.path.join(picaso_path, "figures", "hd189", f"{case_label}.png"))
             plt.close(fig)
+
+            pkl.dump(out, open(fname, 'wb'))
 
 # %%
