@@ -31,20 +31,7 @@ ck_db_path = ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'prew
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 sonora_diamondback_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','diamondback')
 
-
-# %% [markdown]
-# ## Set up the PICASO connection for three test cases (mono and correlated-k)
-
-# %%
-#monochromatic opacities pulling the default
-opacity_mono = jdi.opannection()
-#opacity datase with preweighted ck tables
-opacity_ck = jdi.opannection(ck_db=ck_db_path,
-                             method='preweighted')
-
-#lets book-keep these to compare
-calc = {'mono':  opacity_mono,
-        'ck':    opacity_ck}
+opacity_ck = jdi.opannection(ck_db=ck_db_path, method='preweighted')
 
 cases = {}
 df = {}
@@ -86,9 +73,6 @@ atm = cases[key].inputs['atmosphere']['profile']
 # %%
 cases[key].atmosphere(df=atm)
 df[key] = cases[key].spectrum(calc[key], full_output=True, calculation='thermal')
-
-# %% [markdown]
-# ## Grab the thermal fluxes, reflected fluxes, and pressure levels from the full output
 
 # %%
 # Get the data out of the picaso run
