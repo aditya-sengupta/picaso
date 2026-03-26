@@ -3,7 +3,6 @@
 # Tint = 300, 500, 800, 1100, 1400, 1700, 2000, and 2300
 # log g = 5.0
 
-# %%
 import pickle as pkl
 import os
 import sys
@@ -14,11 +13,14 @@ import picaso.justdoit as jdi
 import picaso.justplotit as jpi
 import virga.justdoit as vj
 import astropy.units as u
+import astropy.constants as c
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from datetime import datetime
+
+SIGMA_SB = float(c.sigma_sb / (u.W / u.m**2 / u.K**4))
 
 sys.path.append(".")
 from diagnostic_plot import pre_fixed_plot, diagnostic_plot
@@ -37,14 +39,17 @@ nstr_upper = 88
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
-cloudmode, grav, teff, semi_major = "cloudless", 1000, 600, 0.02
-
+# cloudmode, grav, teff, semi_major = "cloudless", 1000, 600, 0.02
+cloudmode = "cloudless"
+grav = 1000
+teff = int(sys.argv[1])
+semi_major = float(sys.argv[2])
 
 print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
 fname_stem = f"match_irr_teff{teff}_grav{grav}_semimajor{semi_major}"
 fname = os.path.join(picaso_path, f"data/match_sagnick/{fname_stem}.pkl")
 
-cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
+cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
 cl_run.effective_temp(teff) # input effective temperature
 opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
@@ -54,13 +59,12 @@ cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='
 nlevel = 91 # number of plane-parallel levels in your code
 rfacv = 0.5 # irradiated fixed clouds converge horribly with this = 0 (kinda obviously if you think about it)
 
-pressure_grid = np.logspace(-4, 4, nlevel)
+pressure_grid = np.logspace(-4, 3, nlevel)
 pressure_bobcat,temp_bobcat = np.loadtxt(jdi.os.path.join(sonora_profile_db,f"t{teff}g{grav}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
-temp_guess = np.interp(np.log10(pressure_grid), np.log10(pressure_bobcat), temp_bobcat)
+temp_guess = np.ones(91) * teff * 5 # np.interp(np.log10(pressure_grid), np.log10(pressure_bobcat), temp_bobcat)
 
 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
 
-# %%
 out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
 _, grad, _ = jpi.pt_adiabat(out, cl_run, opacity_ck, plot=False)
 diagnostic_plot_path = os.path.join(picaso_path, f"figures/match_sagnick/{fname_stem}.png")
@@ -115,4 +119,6 @@ plt.savefig(os.path.join(picaso_path, "figures", "match_sagnick", f"{fname_stem}
 plt.close(fig)
 pkl.dump(out, open(fname, 'wb'))
 # %%
-Teff = (-np.sum((lambda x: 0.5 * (x[1:] + x[:-1]))(out["spectrum_output"]['thermal']) * np.diff(1e4 / out["spectrum_output"]["wavenumber"])) / SIGMA_SB) ** (1/4)
+# Teff = (-np.sum((lambda x: 0.5 * (x[1:] + x[:-1]))(out["spectrum_output"]['thermal']) * np.diff(1e4 / out["spectrum_output"]["wavenumber"])) / SIGMA_SB) ** (1/4)
+
+# %%

@@ -44,7 +44,7 @@ ax.set_ylim(500, 1e-4)
 ax.set_xlim(0, 3000)
 ax.set_xlabel('Temperature [K]', fontsize=14)
 ax.set_ylabel('Pressure [bar]', fontsize=14)
-ax.set_title('Solution family: T-P profiles\n(dot = RCB level)', fontsize=13)
+ax.set_title('Solution family: T-P profiles', fontsize=13)
 sm = plt.cm.ScalarMappable(cmap=cmap,
                             norm=plt.Normalize(int(sorted_keys[0]), int(sorted_keys[-1])))
 plt.colorbar(sm, ax=ax, label='RCB level index')
