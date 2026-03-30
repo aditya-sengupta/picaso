@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import picaso
 
 def multidimensional_interpolation_weights(
     params, 
@@ -41,7 +42,8 @@ def multidimensional_interpolation_weights(
                 
     return weights
 
-grid_path = "/Users/adityasengupta/picaso/models_kazumasa"
+picaso_path = os.path.dirname(picaso.__path__[0])
+grid_path = os.path.join(picaso_path, "models_kazumasa")
 
 grid_values = [
     np.array([1, 3, 10, 31, 100]), # metallicity
