@@ -22,6 +22,10 @@ from datetime import datetime
 
 SIGMA_SB = float(c.sigma_sb / (u.W / u.m**2 / u.K**4))
 
+cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
+cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
+fsed = 2
+
 sys.path.append(".")
 from diagnostic_plot import pre_fixed_plot, diagnostic_plot
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
@@ -30,11 +34,12 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bob
 
 mh = '0.0'
 CtoO = '0.46'
+nlevel = 91
 ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f'sonora_2121grid_feh{mh}_co{CtoO}.hdf5')
 
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 
-nstr_upper = 88
+nstr_upper = 76
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
@@ -44,39 +49,53 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
     for teff in np.arange(200, 2401, 200):
         for semi_major in np.array([0.02, 0.04, 0.13, 0.5]):
             already_run = False
-            print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
-            fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major}"
-            prev_run = os.path.join(picaso_path, f"data/match_sagnick/{fname_stem}.pkl")
-            if os.path.exists(prev_run):
+            print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au, fsed = {fsed}")
+            fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major}_fsed{fsed}"
+            fname = os.path.join(picaso_path, f"data/cloudy_irradiated/{fname_stem}.pkl")
+            fname_cloudless = os.path.join(picaso_path, f"data/cloudless_irradiated_from_kazumasa/{fname_stem}.pkl")
+            if os.path.exists(fname):
                 try:
-                    out = pkl.load(open(prev_run, "rb"))
+                    out = pkl.load(open(fname, "rb"))
                     if out["converged"] == 1 and np.max(out["temperature"]) < 5199:
                         already_run = True
                 except Exception:
                     pass
-            fname = os.path.join(picaso_path, f"data/cloudless_irradiated_from_kazumasa/{fname_stem}.pkl")
-
-            cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
-            cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
-            cl_run.effective_temp(teff) # input effective temperature
-            opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
-
-            cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun,semi_major=semi_major, semi_major_unit=u.AU)
-
-            nlevel = 91 # number of plane-parallel levels in your code
-            rfacv = 0.5 # irradiated fixed clouds converge horribly with this = 0 (kinda obviously if you think about it)
             
-            if not already_run:
+            pressure_grid = None
+            temp_guess = None
+            if os.path.exists(fname_cloudless):
+                try:
+                    out_cloudless = pkl.load(open(fname_cloudless, "rb"))
+                    pressure_grid = out_cloudless["pressure"]
+                    temp_guess = out_cloudless["temperature"]
+                except Exception:
+                    pass
+            else:
                 pressure_grid = np.logspace(-4, 3, nlevel)
-                pressure_bobcat,temp_bobcat = np.loadtxt(jdi.os.path.join(sonora_profile_db,f"t{teff}g{grav}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
                 temp_guess = np.minimum(kazumasa_hj_grid_interpolation(1.0, semi_major, teff, grav, pressure_grid=pressure_grid), 5199.0)
 
+            if not already_run:
+                cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
+                cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
+                cl_run.effective_temp(teff) # input effective temperature
+                opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
+
+                cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
+                rfacv = 0.5 # irradiated fixed clouds converge horribly with this = 0 (kinda obviously if you think about it)
+
+                kz = np.ones_like(pressure_grid) * 1e10 # idk
                 cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
+                virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
+                virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+                virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+                virga_out = vj.compute(virga_planet, as_dict=True, directory="/home/adityars/virga/refrind") # for lux
+                cl_run.fix_virga_clouds(virga_out)
 
                 out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
                 _, grad, _ = jpi.pt_adiabat(out, cl_run, opacity_ck, plot=False)
-                diagnostic_plot_path = os.path.join(picaso_path, f"figures/cloudless_irradiated_from_kazumasa/{fname_stem}.png")
-                fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+
+                diagnostic_plot_path = os.path.join(picaso_path, f"figures/cloudy_irradiated/{fname_stem}.png")
+                fig, axes = plt.subplots(3, 2, figsize=(8, 12))
 
                 layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
                 N = len(out["pressure"])
@@ -122,8 +141,25 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
                 ax2.set_yticks(np.arange(0, N-1, 10))
                 ax2.set_yticklabels(np.arange(0, N-1, 10)[::-1])
 
+                if virga_out is not None and all([x in virga_out.keys() for x in ["condensibles", "condensate_mmr"]]):
+                    for (i, condensible) in enumerate(virga_out["condensibles"]):
+                        axes[2, 0].loglog(virga_out["condensate_mmr"][:,i], virga_out["pressure"], label=condensible, color=cloud_colors[i])
+                    axes[2, 0].set_xlim((1e-10, 2 * np.max(virga_out["condensate_mmr"])))
+                    axes[2, 0].set_ylim((np.min(out["pressure"]), np.max(out["pressure"])))
+                    axes[2, 0].set_xlabel("Condensate mass mixing ratio")
+                    axes[2, 0].set_ylabel("Pressure (bar)")
+                    axes[2, 0].invert_yaxis()
+                    axes[2, 0].legend()
+                
+                if virga_out is not None and "opd_per_layer" in virga_out.keys():
+                    axes[2, 1].loglog(virga_out["opd_per_layer"][:,55], layer_p)
+                    axes[2, 1].invert_yaxis()
+                    axes[2, 1].set_xlim((1e-10, 2 * np.max(out["all_opd"][-(N-1):])))
+                    axes[2, 1].set_xlabel("Optical depth")
+                    axes[2, 1].set_ylabel("Pressure (bar)")
+
                 plt.tight_layout()
-                plt.savefig(os.path.join(picaso_path, "figures", "cloudless_irradiated", f"{fname_stem}.png"))
+                plt.savefig(os.path.join(picaso_path, "figures", "cloudy_irradiated", f"{fname_stem}.png"))
                 plt.close(fig)
                 pkl.dump(out, open(fname, 'wb'))
 

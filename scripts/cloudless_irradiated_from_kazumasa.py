@@ -46,27 +46,26 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
             already_run = False
             print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
             fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major}"
-            prev_run = os.path.join(picaso_path, f"data/match_sagnick/{fname_stem}.pkl")
-            if os.path.exists(prev_run):
+            fname = os.path.join(picaso_path, f"data/cloudless_irradiated_from_kazumasa/{fname_stem}.pkl")
+            if os.path.exists(fname):
                 try:
-                    out = pkl.load(open(prev_run, "rb"))
+                    out = pkl.load(open(fname, "rb"))
                     if out["converged"] == 1 and np.max(out["temperature"]) < 5199:
                         already_run = True
                 except Exception:
                     pass
-            fname = os.path.join(picaso_path, f"data/cloudless_irradiated_from_kazumasa/{fname_stem}.pkl")
 
-            cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
-            cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
-            cl_run.effective_temp(teff) # input effective temperature
-            opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
-
-            cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun,semi_major=semi_major, semi_major_unit=u.AU)
-
-            nlevel = 91 # number of plane-parallel levels in your code
-            rfacv = 0.5 # irradiated fixed clouds converge horribly with this = 0 (kinda obviously if you think about it)
-            
             if not already_run:
+                cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
+                cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
+                cl_run.effective_temp(teff) # input effective temperature
+                opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
+
+                cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
+
+                nlevel = 91 # number of plane-parallel levels in your code
+                rfacv = 0.5 # irradiated fixed clouds converge horribly with this = 0 (kinda obviously if you think about it)
+                
                 pressure_grid = np.logspace(-4, 3, nlevel)
                 pressure_bobcat,temp_bobcat = np.loadtxt(jdi.os.path.join(sonora_profile_db,f"t{teff}g{grav}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
                 temp_guess = np.minimum(kazumasa_hj_grid_interpolation(1.0, semi_major, teff, grav, pressure_grid=pressure_grid), 5199.0)
