@@ -7,7 +7,7 @@
 #SBATCH --ntasks=80                  # Number of MPI ranks
 #SBATCH --nodes=1                    # Number of nodes
 #SBATCH --ntasks-per-node=40         # How many tasks on each node
-#SBATCH --time=48:00:00              # Time limit hrs:min:sec
+#SBATCH --time=24:00:00              # Time limit hrs:min:sec
 #SBATCH --output=cloudy_irradiated_%j.log     # Standard output and error log
 
 pwd; hostname; date
