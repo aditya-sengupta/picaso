@@ -52,6 +52,7 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
             print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au, fsed = {fsed}")
             fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major}_fsed{fsed}"
             fname = os.path.join(picaso_path, f"data/cloudy_irradiated/{fname_stem}.pkl")
+            fname_npz = os.path.join(picaso_path, f"data/cloudy_irradiated/{fname_stem}.npz")
             fname_cloudless = os.path.join(picaso_path, f"data/cloudless_irradiated_from_kazumasa/{fname_stem}.pkl")
             if os.path.exists(fname):
                 try:
@@ -162,5 +163,7 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
                 plt.savefig(os.path.join(picaso_path, "figures", "cloudy_irradiated", f"{fname_stem}.png"))
                 plt.close(fig)
                 pkl.dump(out, open(fname, 'wb'))
+                t, p = out["temperature"], out["pressure"]
+                np.savez(fname_npz, t=t, p=p)
 
                 # Teff = (-np.sum((lambda x: 0.5 * (x[1:] + x[:-1]))(out["spectrum_output"]['thermal']) * np.diff(1e4 / out["spectrum_output"]["wavenumber"])) / SIGMA_SB) ** (1/4)

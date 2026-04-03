@@ -13,7 +13,8 @@
 pwd; hostname; date
 
 echo "starting"
+echo $1
 module load python
-/home/adityars/anaconda3/envs/picaso4/bin/python scripts/cloudy_irradiated.py
+/home/adityars/anaconda3/envs/picaso4/bin/python scripts/cloudy_irradiated.py $1
 
 date
