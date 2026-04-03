@@ -43,19 +43,10 @@ cloudmode = "cloudless"
 for grav in np.array([17, 31, 100, 316, 1000, 3160]):
     for teff in np.arange(200, 2401, 200):
         for semi_major in np.array([0.02, 0.04, 0.13, 0.5]):
-            already_run = False
             print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au")
             fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major}"
             fname = os.path.join(picaso_path, f"data/cloudless_irradiated_from_kazumasa/{fname_stem}.pkl")
-            if os.path.exists(fname):
-                try:
-                    out = pkl.load(open(fname, "rb"))
-                    if out["converged"] == 1 and np.max(out["temperature"]) < 5199:
-                        already_run = True
-                except Exception:
-                    pass
-
-            if not already_run:
+            if not os.path.exists(fname):
                 cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
                 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
                 cl_run.effective_temp(teff) # input effective temperature
@@ -87,7 +78,7 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
                     convective_boundary = cvz_locs[1]
                 axes[0, 0].semilogy(out["temperature"], out["pressure"], label="solution")
                 max_temp = np.max(out["temperature"])
-                if not already_run and temp_guess is not None:
+                if temp_guess is not None:
                     axes[0, 0].semilogy(temp_guess, out["pressure"], ls="--", c='b', label="guess")
                     max_temp = max(max_temp, np.max(temp_guess))
                 axes[0, 0].set_xlim((0, max_temp * 1.1))

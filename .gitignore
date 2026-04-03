@@ -13,14 +13,12 @@
 *.fits
 *.h5
 *.hdf5
-<<<<<<< HEAD
+*.log
 *.nc
 *.pt
 *.dat
 *.fits
 *.ascii
-=======
->>>>>>> dev
 
 # Jupyter Notebooks
 .ipynb_checkpoints

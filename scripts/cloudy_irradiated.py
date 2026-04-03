@@ -46,7 +46,7 @@ nstr_upper = 76
 # cloudmode, grav, teff, semi_major = "cloudless", 1000, 600, 0.02
 cloudmode = "fixed"
 for grav in np.array([17, 31, 100, 316, 1000, 3160]):
-    for teff in np.arange(200, 2401, 200):
+    for teff in np.arange(1000, 2401, 200):
         for semi_major in np.array([0.02, 0.04, 0.13, 0.5]):
             already_run = False
             print(f"effective temperature = {teff} K, grav = {grav} m/s/s, cloud mode = {cloudmode}, semimajor axis = {semi_major} au, fsed = {fsed}")
