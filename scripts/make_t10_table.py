@@ -1,4 +1,4 @@
-# %%
+import os
 import numpy as np
 from scipy.integrate import ode
 import matplotlib.pyplot as plt
@@ -34,7 +34,7 @@ def t10(p_col, t_col):
     solver.set_initial_value(t_col[idx], p_col[idx])
     solver.integrate(10.0)
     return float(solver.y[0])
-# %%
+
 fig, axs = plt.subplots(6, 2, figsize=(10, 30))
 gravs = [17, 31, 100, 316, 1000, 3160]
 semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
@@ -80,6 +80,5 @@ for (i, cloudmode) in enumerate(cloudmodes):
             axs[j,i].set_ylim((0, 5199))
             axs[j,i].set_title(f"g = {grav} m/s/s, {cloudmode}")
 axs[0,0].legend()
-plt.show()
-
-# %%
+plt.savefig(os.path.join(picaso_path, "figures/t10/first_t10s.pdf"))
+plt.close(fig)

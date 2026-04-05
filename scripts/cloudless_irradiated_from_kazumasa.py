@@ -25,6 +25,7 @@ SIGMA_SB = float(c.sigma_sb / (u.W / u.m**2 / u.K**4))
 sys.path.append(".")
 from diagnostic_plot import pre_fixed_plot, diagnostic_plot
 from load_kazumasa_irradiated_models import kazumasa_hj_grid_interpolation
+
 picaso_path = os.path.dirname(picaso.__path__[0])
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 
@@ -116,5 +117,7 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
                 plt.savefig(os.path.join(picaso_path, "figures", "cloudless_irradiated", f"{fname_stem}.png"))
                 plt.close(fig)
                 pkl.dump(out, open(fname, 'wb'))
+                t, p = out["temperature"], out["pressure"]
+                np.savez(fname_npz, t=t, p=p)
 
                 # Teff = (-np.sum((lambda x: 0.5 * (x[1:] + x[:-1]))(out["spectrum_output"]['thermal']) * np.diff(1e4 / out["spectrum_output"]["wavenumber"])) / SIGMA_SB) ** (1/4)
