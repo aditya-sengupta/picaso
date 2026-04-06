@@ -24,7 +24,7 @@ SIGMA_SB = float(c.sigma_sb / (u.W / u.m**2 / u.K**4))
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
-fsed = 2
+fsed = int(sys.argv[1])
 
 sys.path.append(".")
 from diagnostic_plot import pre_fixed_plot, diagnostic_plot
@@ -57,7 +57,7 @@ for grav in np.array([17, 31, 100, 316, 1000, 3160]):
             if os.path.exists(fname):
                 try:
                     out = pkl.load(open(fname, "rb"))
-                    if out["converged"] == 1 and np.max(out["temperature"]) < 5199:
+                    if out["converged"] == 1:
                         already_run = True
                 except Exception:
                     pass
