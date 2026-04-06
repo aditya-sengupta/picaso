@@ -136,7 +136,7 @@ max_temp = np.max(out["temperature"])
 axes[0, 0].semilogy(temp_guess, out["pressure"], ls="--", c='b', label="guess")
 max_temp = max(max_temp, np.max(temp_guess))
 for (gas_name, gas_color) in zip(cloud_species, cloud_colors):
-    p,t = vj.condensation_t(gas_name, 1, 2.2, pressure=out["pressur"])
+    p,t = vj.condensation_t(gas_name, 1, 2.2, pressure=out["pressure"])
     axes[0, 0].semilogy(t, p, c=gas_color, ls="--")
 axes[0, 0].set_xlim((0, max_temp * 1.1))
 axes[0, 0].set_ylim((np.min(out["pressure"]) * 0.9, np.max(out["pressure"]) * 1.1))
