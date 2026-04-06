@@ -78,26 +78,37 @@ if os.path.exists(fname):
 
 pressure_grid = None
 temp_guess = None
-nstr_upper = 61 # just for testing
 
 # This initial guess matters a lot
 # For at least one case, (g = 100m/s^2, teff = 1000K, semimajor = 0.02 au, fsed = 2)
 # Kazumasa's grid (no TiO/VO) gives us all four clouds
 # My grid (with TiO/VO) only gives us one
 # I don't want to work off of non PICASO runs
-# so I think I should do a set of cloudless non-TiO/VO runs
+# so I think I should do a set of cloudless non-TiO/VO 
+# actually no, it is physically real that we only have one cloud come up
+nstr_upper = None
 if os.path.exists(legacy_fname_cloudless):
     try:
         out_cloudless = pkl.load(open(legacy_fname_cloudless, "rb"))
         pressure_grid = out_cloudless["pressure"]
         temp_guess = out_cloudless["temperature"]
+        cvz_locs = out_cloudless["cvz_locs"]
+        if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9:
+            nstr_upper = cvz_locs[-2]
+        else:
+            nstr_upper = cvz_locs[1]
         print("Guessing off previous cloudless run")
+
     except Exception:
         pass
 else:
     pressure_grid = np.logspace(-4, 3, nlevel)
     temp_guess = np.minimum(kazumasa_hj_grid_interpolation(1.0, semi_major, teff, grav, pressure_grid=pressure_grid), 5199.0)
+    nstr_upper = 89
     print("Guessing off Kazumasa's grid")
+
+nstr_upper_init = nstr_upper
+print(f"Starting at {nstr_upper = }")
 
 cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
@@ -127,7 +138,7 @@ layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
 N = len(out["pressure"])
 
 cvz_locs = out["cvz_locs"]
-if cvz_locs[-2] > 0 and cvz_locs[2] != 89:
+if cvz_locs[-2] > 0 and out["temperature"][cvz_locs[-2]] < 5199.9:
     convective_boundary = cvz_locs[-2]
 else:
     convective_boundary = cvz_locs[1]
@@ -190,6 +201,7 @@ plt.tight_layout()
 plt.savefig(os.path.join(picaso_path, "figures", "both_irradiated", f"{fname_stem}.png"))
 plt.close(fig)
 with h5py.File(fname, "w") as f:
+    f.attrs["nstr_upper_init"] = nstr_upper_init
     out_to_hdf5(out, f)
 
 # Teff = (-np.sum((lambda x: 0.5 * (x[1:] + x[:-1]))(out["spectrum_output"]['thermal']) * np.diff(1e4 / out["spectrum_output"]["wavenumber"])) / SIGMA_SB) ** (1/4)
