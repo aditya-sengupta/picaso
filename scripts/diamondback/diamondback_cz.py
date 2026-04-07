@@ -8,7 +8,8 @@ detached_regex = re.compile(r".+ TOP OF BOTTOM= (\d\d)\n")
 attached_regex = re.compile(r" TOP OF CONVECTION ZONE= (\d\d)\n")
 
 def find_rcb_diamondback(teff, grav_ms2, fsed):
-    all_lines = readInFile(path.join(diamondback_datapath, f"diamondback_allmodels/t{teff}g{grav_ms2}f{fsed}_m0.0_co1.0.out"))
+    fsed_str = f"f{fsed}" if fsed != "nc" else "nc"
+    all_lines = readInFile(path.join(diamondback_datapath, f"diamondback_allmodels/t{teff}g{grav_ms2}{fsed_str}_m0.0_co1.0.out"))
     all_lines.reverse()
     for line in all_lines:
         if "TOP OF" in line:
@@ -16,7 +17,6 @@ def find_rcb_diamondback(teff, grav_ms2, fsed):
                 return int(detached_regex.match(line)[1])
             else:
                 return int(attached_regex.match(line)[1])
-
 
 if __name__ == "__main__":
     for fsed in [1, 3, 8]:

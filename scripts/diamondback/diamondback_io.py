@@ -1,6 +1,6 @@
 import numpy as np
 
-diamondback_datapath = "/Users/adityasengupta/projects/clouds/picaso/data"
+diamondback_datapath = "/Users/adityasengupta/picaso/reference/sonora_grids"
 
 def readInFile(filename):
 	f = open(filename)

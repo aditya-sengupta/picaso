@@ -8,6 +8,7 @@ from picaso.grad import did_grad_cp
 from collections import namedtuple
 import json
 import pandas as pd
+import h5py
 
 __refdata__ = os.environ['picaso_refdata']
 picaso_path = os.path.dirname(os.path.dirname(__refdata__))
@@ -41,6 +42,10 @@ semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
 teffs = np.arange(200, 2401, 200)
 cloudmodes = ["cloudless", "fixed"]
 cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]
+count_cloudless_h5 = 0
+count_cloudless_npz = 0
+count_cloudy_npz = 0
+
 for (i, cloudmode) in enumerate(cloudmodes):
     for (j, grav) in enumerate(gravs):
         for (semimajor, c) in zip(semimajors, cmap):
@@ -48,15 +53,29 @@ for (i, cloudmode) in enumerate(cloudmodes):
             teffs_this = []
             for teff in teffs:
                 if semimajor < np.inf:
+                    pressure, temperature = None, None
                     if cloudmode == "cloudless":
-                        fname = f"data/cloudless_irradiated_from_kazumasa/irr_teff{teff}_grav{grav}_semimajor{semimajor}.npz"
+                        fname = f"data/both_irradiated/irr_teff{teff}_grav{grav}_semimajor{semimajor:.2f}nc.h5"
+                        fname_legacy = f"data/cloudless_irradiated_from_kazumasa/irr_teff{teff}_grav{grav}_semimajor{semimajor}.npz"
+                        if os.path.exists(os.path.join(picaso_path, fname)):
+                            with h5py.File(os.path.join(picaso_path, fname)) as f:
+                                pressure, temperature = np.array(f['pressure']), np.array(f['temperature'])
+                                
+                            count_cloudless_h5 += 1
+                        elif os.path.exists(os.path.join(picaso_path, fname_legacy)):
+                            f = np.load(os.path.join(picaso_path, fname_legacy))
+                            pressure, temperature = f['p'], f['t']
+                            count_cloudless_npz += 1
                     else:
                         fname = f"data/cloudy_irradiated/irr_teff{teff}_grav{grav}_semimajor{semimajor}_fsed2.npz"
-                    if os.path.exists(os.path.join(picaso_path, fname)):
-                        f = np.load(os.path.join(picaso_path, fname))
-                        pressure, temperature = f['p'], f['t']
-                        t10s.append(t10(pressure, temperature))
-                        teffs_this.append(teff)
+                        if os.path.exists(os.path.join(picaso_path, fname)):
+                            f = np.load(os.path.join(picaso_path, fname))
+                            pressure, temperature = f['p'], f['t']
+                        count_cloudy_npz += 1
+                    if pressure is None:
+                        continue
+                    t10s.append(t10(pressure, temperature))
+                    teffs_this.append(teff)
                 elif grav >= 31:
                     pressure_sonora, temp_sonora = None, None
                     if teff >= 900:
@@ -80,5 +99,8 @@ for (i, cloudmode) in enumerate(cloudmodes):
             axs[j,i].set_ylim((0, 5199))
             axs[j,i].set_title(f"g = {grav} m/s/s, {cloudmode}")
 axs[0,0].legend()
-plt.savefig(os.path.join(picaso_path, "figures/t10/first_t10s.pdf"))
+figpath = os.path.join(picaso_path, "figures/t10/first_t10s.pdf")
+plt.savefig(figpath)
+print(f"{count_cloudless_h5 = }, {count_cloudless_npz = }, {count_cloudy_npz = }")
+print(figpath)
 plt.close(fig)

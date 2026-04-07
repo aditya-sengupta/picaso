@@ -8,7 +8,8 @@ diamondback_datapath = "/Users/adityasengupta/picaso/reference/sonora_grids"
 lmap = lambda f, x: list(map(f, x))
 
 def read_diamondback_structure(teff, grav_ms2, fsed):
-    return pd.read_csv(f"../reference/sonora_grids/diamondback/t{teff}g{grav_ms2}f{fsed}_m0.0_co1.0.pt", sep=r"\s+", skiprows=[1])
+    fsed_str = f"f{fsed}" if fsed != "nc" else "nc"
+    return pd.read_csv(path.join(diamondback_datapath, "diamondback", f"t{teff}g{grav_ms2}{fsed_str}_m0.0_co1.0.pt"), sep=r"\s+", skiprows=[1])
 
 def diamondback_pt(teff, grav_ms2, fsed):
     df = read_diamondback_structure(teff, grav_ms2, fsed)
