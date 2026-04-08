@@ -17,14 +17,14 @@ echo $1
 module load python
 
 #teffs=(1000 1200 1400 1600 1800 2000 2200 2400)
-fseds=(1 2 3 4 8)
+fseds=(0 2 4)
 gravs=(17 31 100 316 1000 3160)
 semimajors=(0.02 0.04 0.13 0.50)
 
 for fsed in "${fseds[@]}"; do
     for grav in "${gravs[@]}"; do
         for semimajor in "${semimajors[@]}"; do
-            /home/adityars/anaconda3/envs/picaso4/bin/python scripts/both_irradiated.py "$grav" $1 "$semimajor" "$fsed"
+            /home/adityars/anaconda3/envs/picaso4/bin/python scripts/both_irradiated_startlow.py "$grav" $1 "$semimajor" "$fsed"
         done
     done
 done

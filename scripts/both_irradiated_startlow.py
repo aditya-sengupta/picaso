@@ -74,7 +74,7 @@ elif fsed == 0:
     fname_stem += "nc"
 elif fsed == -1:
     fname_stem += "nc_noTiOVO"
-fname = os.path.join(picaso_path, "data", "both_irradiated", f"{fname_stem}.h5")
+fname = os.path.join(picaso_path, "data", "both_irradiated_startlow", f"{fname_stem}.h5")
 legacy_fname_cloudless = os.path.join(picaso_path, "data", "cloudless_irradiated_from_kazumasa", legacy_fname_stem_cloudless + ".pkl")
 if os.path.exists(fname):
     sys.exit()
@@ -96,10 +96,10 @@ if os.path.exists(legacy_fname_cloudless):
         pressure_grid = out_cloudless["pressure"]
         temp_guess = out_cloudless["temperature"]
         cvz_locs = out_cloudless["cvz_locs"]
-        if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9:
+        if False and cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9:
             nstr_upper = cvz_locs[-2]
         else:
-            nstr_upper = cvz_locs[1]
+            nstr_upper = 89
         print("Guessing off previous cloudless run")
 
     except Exception:
@@ -134,7 +134,7 @@ if fsed > 0:
 out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
 _, grad, _ = jpi.pt_adiabat(out, cl_run, opacity_ck, plot=False)
 
-diagnostic_plot_path = os.path.join(picaso_path, f"figures/both_irradiated/{fname_stem}.png")
+diagnostic_plot_path = os.path.join(picaso_path, f"figures/both_irradiated_startlow/{fname_stem}.png")
 fig, axes = plt.subplots(3, 2, figsize=(8, 12))
 
 layer_p = np.sqrt(out["pressure"][:-1] * out["pressure"][1:])
