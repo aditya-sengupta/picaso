@@ -27,14 +27,22 @@ AdiabatBundle = AdiabatBundle(
     np.array(cp_grad['specific_heat'])
 )
 
-def adiabatic_grad(p, t):
-    grad_x, _ = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)
-    return float(grad_x)
+def adiabatic_grad_cp(p, t):
+    grad_x, cp_x = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)
+    return float(grad_x), float(cp_x)
 
 def dT_dP(p, t):
-    return adiabatic_grad(p, t) * t / p
+    return adiabatic_grad(p, t)[0] * t / p
 
 # okay great, this gives me the adiabatic dT/dP for any temperature and pressure
 # next up, I need some prescription for the convective flux
-# two possibilities: Rafikov+06, or Marley+something
-# hang on, Rafikov+06 doesn't have a convective flux equation...I swear I saw one somewhere
+# Marley and Robinson 2015 says this is
+
+Rs = 8.314e7 / 2.2 # erg/K/mol normalized to 2.2u? correct?
+
+def convective_flux(f, P, T, cp):
+    # f - superadiabatic fraction
+    cp = adiabatic_grad_cp(P, T)[1]
+    return np.max(0.0, f) ** (3/2) * Rs * P * (T / cp) ** (1/2)
+
+# this isn't actually a useful test...convective flux is 0 by definition if 

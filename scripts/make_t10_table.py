@@ -10,6 +10,11 @@ import json
 import pandas as pd
 import h5py
 
+import sys
+sys.path.append(".")
+from scripts.diamondback.diamondback_cz import find_rcb_diamondback
+from scripts.load_diamondback import diamondback_pt
+
 __refdata__ = os.environ['picaso_refdata']
 picaso_path = os.path.dirname(os.path.dirname(__refdata__))
 
@@ -25,6 +30,8 @@ AdiabatBundle = AdiabatBundle(
 
 bobcat_path = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 
+tag = "_startlow" # or ""
+
 def _dTdp(p, t):
     grad_x, _ = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)
     return float(grad_x) * t / p
@@ -36,71 +43,48 @@ def t10(p_col, t_col):
     solver.integrate(10.0)
     return float(solver.y[0])
 
-fig, axs = plt.subplots(6, 2, figsize=(10, 30))
-gravs = [17, 31, 100, 316, 1000, 3160]
-semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
-teffs = np.arange(200, 2401, 200)
-cloudmodes = ["cloudless", "fixed"]
-cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]
-count_cloudless_h5 = 0
-count_cloudless_npz = 0
-count_cloudy_npz = 0
+for fsed in [1, 2, 3, 4, 8, "nc"]:
+    fig, axs = plt.subplots(2, 3, figsize=(8, 5))
+    gravs = [17, 31, 100, 316, 1000, 3160]
+    semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
+    teffs = np.arange(1000, 2401, 200)
+    cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]
 
-for (i, cloudmode) in enumerate(cloudmodes):
     for (j, grav) in enumerate(gravs):
         for (semimajor, c) in zip(semimajors, cmap):
-            t10s = []
             teffs_this = []
+            t10s = []
             for teff in teffs:
                 if semimajor < np.inf:
-                    pressure, temperature = None, None
-                    if cloudmode == "cloudless":
-                        fname = f"data/both_irradiated/irr_teff{teff}_grav{grav}_semimajor{semimajor:.2f}nc.h5"
-                        fname_legacy = f"data/cloudless_irradiated_from_kazumasa/irr_teff{teff}_grav{grav}_semimajor{semimajor}.npz"
-                        if os.path.exists(os.path.join(picaso_path, fname)):
-                            with h5py.File(os.path.join(picaso_path, fname)) as f:
-                                pressure, temperature = np.array(f['pressure']), np.array(f['temperature'])
-                                
-                            count_cloudless_h5 += 1
-                        elif os.path.exists(os.path.join(picaso_path, fname_legacy)):
-                            f = np.load(os.path.join(picaso_path, fname_legacy))
-                            pressure, temperature = f['p'], f['t']
-                            count_cloudless_npz += 1
-                    else:
-                        fname = f"data/cloudy_irradiated/irr_teff{teff}_grav{grav}_semimajor{semimajor}_fsed2.npz"
-                        if os.path.exists(os.path.join(picaso_path, fname)):
-                            f = np.load(os.path.join(picaso_path, fname))
-                            pressure, temperature = f['p'], f['t']
-                        count_cloudy_npz += 1
-                    if pressure is None:
-                        continue
-                    t10s.append(t10(pressure, temperature))
+                    fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
+                    fname = f"data/both_irradiated{tag}/irr_teff{teff}_grav{grav}_semimajor{semimajor:.2f}{fsed_str}.h5"
+                    if os.path.exists(os.path.join(picaso_path, fname)):
+                        with h5py.File(os.path.join(picaso_path, fname)) as f:
+                            pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
+                            teffs_this.append(teff)
+                            t10s.append(t10(pressure, temperature))
+                elif grav != 17:
                     teffs_this.append(teff)
-                elif grav >= 31:
-                    pressure_sonora, temp_sonora = None, None
-                    if teff >= 900:
-                        if cloudmode == "fixed":
-                            cl = "f2"
-                        else:
-                            cl = "nc"
-                        sonora_df = pd.read_csv(os.path.join(__refdata__, f"sonora_grids/diamondback/t{teff}g{grav}{cl}_m0.0_co1.0.pt"), sep=r"\s+", skiprows=[1])
-                        pressure_sonora = np.array(sonora_df["P"])
-                        temp_sonora = np.array(sonora_df["T"])
-                    else:
-                        pressure_sonora, temp_sonora = np.loadtxt(os.path.join(bobcat_path,f"t{teff}g{grav}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows=1)
-                    t10s.append(t10(pressure_sonora, temp_sonora))
-                    teffs_this.append(teff)
+                    p, t = diamondback_pt(teff, grav, fsed)
+                    t10s.append(t10(p, t))
+                # add in Diamondback 
 
             label = f"a = {semimajor} au" if semimajor < np.inf else "sonora"
-            axs[j,i].plot(teffs_this, t10s, c=c, label=label, lw=1 if semimajor < np.inf else 3)
-            axs[j,i].set_xlabel("Tint (K)")
-            axs[j,i].set_ylabel("T10 (K)")
-            axs[j,i].set_xlim((np.min(teffs), np.max(teffs)))
-            axs[j,i].set_ylim((0, 5199))
-            axs[j,i].set_title(f"g = {grav} m/s/s, {cloudmode}")
-axs[0,0].legend()
-figpath = os.path.join(picaso_path, "figures/t10/first_t10s.pdf")
-plt.savefig(figpath)
-print(f"{count_cloudless_h5 = }, {count_cloudless_npz = }, {count_cloudy_npz = }")
-print(figpath)
-plt.close(fig)
+            curr_ax = axs[j//3,j%3]
+            curr_ax.plot(teffs_this, t10s, c=c, label=label, lw=1 if semimajor < np.inf else 2)
+            curr_ax.invert_yaxis()
+            axs[-1,j%3].set_xlabel("Tint (K)")
+            curr_ax.set_ylabel("T10 (K)")
+            curr_ax.set_xlim((np.min(teffs), np.max(teffs)))
+            curr_ax.set_ylim((0, 5199))
+            curr_ax.set_title(f"g = {grav} m/s/s, {fsed_str}")
+            if j%3 > 0:
+                curr_ax.yaxis.set_visible(False)
+            if j//3 == 0:
+                curr_ax.xaxis.set_visible(False)
+
+    axs[0,0].legend(fontsize='small')
+    figpath = os.path.join(picaso_path, f"figures/t10/t10_table{tag}_{fsed_str}.pdf")
+    plt.savefig(figpath)
+    print(figpath)
+    plt.close(fig)
