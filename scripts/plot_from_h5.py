@@ -122,6 +122,6 @@ if __name__ == "__main__":
             pressure_grid = np.logspace(-4, 3, nlevel)
             temp_guess = np.minimum(kazumasa_hj_grid_interpolation(1.0, semi_major, teff, grav, pressure_grid=pressure_grid), 5199.0)
     """
-    for fname in tqdm(os.listdir(path.join(picaso_path, "data", "both_irradiated"))):
-        data_path = path.join(picaso_path, "data", "both_irradiated", fname)
-        plot_from_h5(data_path, f"both_irradiated_postrun/{fname[:-3]}.pdf")
+    for fname in tqdm(os.listdir(path.join(picaso_path, "data", "both_irradiated_startlow"))):
+        data_path = path.join(picaso_path, "data", "both_irradiated_startlow", fname)
+        plot_from_h5(data_path, f"both_irradiated_postrun/{fname[:-3]}_startlow.pdf")
