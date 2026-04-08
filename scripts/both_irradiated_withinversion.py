@@ -25,11 +25,8 @@ import h5py
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 cloud_colors = ['#CC5555', '#3BA39C', '#CCB84D', '#FF8C00']
 
-virga_path = None
-try:
-    virga_path = os.path.dirname(virga.__path__[0])
-except FileNotFoundError:
-    virga_path = "/home/adityars/virga/"
+virga_path = "/home/adityars/virga/"
+#virga_path = os.path.dirname(virga.__path__[0])
 
 sys.path.append(".")
 from out_to_hdf5 import out_to_hdf5
