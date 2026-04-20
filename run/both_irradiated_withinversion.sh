@@ -25,7 +25,7 @@ for teff in "${teffs[@]}"; do
     for grav in "${gravs[@]}"; do
         for semimajor in "${semimajors[@]}"; do
             for fsed in "${fseds[@]}"; do
-                python scripts/both_irradiated_withinversion.py "$grav" "$teff" "$semimajor" "$fsed"
+                /home/adityars/anaconda3/envs/picaso4/bin/python scripts/both_irradiated_withinversion.py "$grav" "$teff" "$semimajor" "$fsed"
             done
         done
     done
