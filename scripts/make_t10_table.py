@@ -30,7 +30,7 @@ AdiabatBundle = AdiabatBundle(
 
 bobcat_path = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 
-tag = "_startlow" # or ""
+tag = "_withinversion" # or ""
 
 def _dTdp(p, t):
     grad_x, _ = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)

@@ -25,7 +25,7 @@ dependencies = [
     "sphinx",
     "scipy",
     "h5py",
-    "virga-exo==2.0.1",
+    "virga-exo>=2.0.1",
     "xarray",
     "pooch",
     "tqdm",

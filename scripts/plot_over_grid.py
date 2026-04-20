@@ -14,6 +14,8 @@ import pickle as pkl
 from tqdm import tqdm
 import imageio
 
+tag = "_withinversion"
+
 picaso_path = path.dirname(picaso.__path__[0])
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
@@ -26,7 +28,7 @@ def plot_gridpoint(teff, grav, semi_major):
     fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major:.2f}"
     for fsed in fseds:
         fsed_str = f"fsed{fsed}" if fsed > 0 else "nc"
-        h5_path = path.join(picaso_path, "data", "both_irradiated", f"{fname_stem}{fsed_str}.h5")
+        h5_path = path.join(picaso_path, "data", "both_irradiated" + tag, f"{fname_stem}{fsed_str}.h5")
         out = {}
         spectrum_output = {}
         with h5py.File(h5_path) as f:
@@ -68,7 +70,7 @@ def plot_gridpoint(teff, grav, semi_major):
     # axes[1].set_ylabel("Pressure (bar)")
 
     plt.suptitle(r"$T_{int} = $" + str(teff) + "K, surface gravity = " + str(grav) + r"m/s${}^2$" + f", semimajor axis = {semi_major} au")
-    plt.savefig(path.join(picaso_path, "figures", "grid_plots", f"{fname_stem}.png"), dpi=300)
+    plt.savefig(path.join(picaso_path, "figures", "grid_plots" + tag, f"{fname_stem}.png"), dpi=300)
     plt.close()
 
 if __name__ == "__main__":
@@ -81,10 +83,10 @@ if __name__ == "__main__":
     for semi_major in [0.02, 0.04, 0.13, 0.50]:
         for grav in [17, 31, 100, 316, 1000, 3160]:
             for teff in np.arange(1000, 2401, 200):
-                # plot_gridpoint(teff, grav, semi_major)
+                plot_gridpoint(teff, grav, semi_major)
                 fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major:.2f}"
-                fpath = path.join(picaso_path, "figures", "grid_plots", f"{fname_stem}.png")
+                fpath = path.join(picaso_path, "figures", "grid_plots" + tag, f"{fname_stem}.png")
                 fpaths.append(fpath)
 
     ims = [imageio.v2.imread(f) for f in fpaths]
-    imageio.mimwrite(path.join(picaso_path, "figures", "grid_plots", "_irradiated_cloudy_grid.mp4"), ims, fps=4)
+    imageio.mimwrite(path.join(picaso_path, "figures", "grid_plots" + tag, "_irradiated_cloudy_grid.mp4"), ims, fps=4)

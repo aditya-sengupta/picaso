@@ -42,6 +42,14 @@ def read_diamondback_cloud_structure(teff, grav_ms2, fsed):
     df = reduce(lambda x, y: pd.merge(x, y[y.columns.difference(x.columns)], left_index=True, right_index=True), dfs)
     return df.rename(columns={"P(bar)": "pressure", "T(K)": "temperature", "kz(cm^2/s)": "kz"})
 
+def find_cloudbase_diamondback(teff, grav_ms2, fsed):
+    cloud_structure = read_diamondback_cloud_structure(teff, grav_ms2, fsed)
+    total_opd = np.array(sum([cloud_structure[x] for x in cloud_structure.keys() if x.endswith("opd")]))
+    if total_opd[-1] == 0.0:
+        return -1 # null; no cloud
+    cloud_base_index = np.where(total_opd == total_opd[-1])[0][0]
+    return cloud_structure["pressure"][cloud_base_index]
+
 def read_diamondback_optical_properties(teff, grav_ms2, fsed):
     cld_file = path.join(diamondback_datapath, f"diamondback_alloutputs/t{teff}g{grav_ms2}f{fsed}_m0.0_co1.0.cld")
     df = pd.read_csv(cld_file, sep=r"\s+", header=None,
