@@ -46,10 +46,10 @@ def t10(p_col, t_col):
 for fsed in [1, 2, 3, 4, 8, "nc"]:
     fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(4, 3, figsize=(8, 10))
-    log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
-    gravs = [17, 31, 100, 316, 1000, 3160]
-    #log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
-    #gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
+    #log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
+    #gravs = [17, 31, 100, 316, 1000, 3160]
+    log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
+    gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
     semimajors = [0.02, 0.04, 0.13, 0.5]
     teffs = np.arange(800, 2401, 10)
     cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]

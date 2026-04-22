@@ -89,6 +89,6 @@ out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
 with h5py.File(fname, "w") as f:
     f["pressure"] = pressure_grid
     f["temperature"] = out["temperature"]
-    for k in virga_out:
+    for k in ["opd_per_layer", "asymmetry", "single_scattering", "condensate_mmr"]:
         f[k] = virga_out[k]
     f.attrs["nstr_upper_init"] = nstr_upper_init
