@@ -44,30 +44,40 @@ def t10(p_col, t_col):
     return float(solver.y[0])
 
 for fsed in [1, 2, 3, 4, 8, "nc"]:
-    fig, axs = plt.subplots(2, 3, figsize=(8, 5))
+    fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
+    fig, axs = plt.subplots(4, 3, figsize=(8, 10))
+    log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
     gravs = [17, 31, 100, 316, 1000, 3160]
-    semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
-    teffs = np.arange(1000, 2401, 200)
+    #log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
+    #gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
+    semimajors = [0.02, 0.04, 0.13, 0.5]
+    teffs = np.arange(800, 2401, 10)
     cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]
 
-    for (j, grav) in enumerate(gravs):
-        for (semimajor, c) in zip(semimajors, cmap):
+    for (semimajor, c) in zip(semimajors, cmap):
+        all_teffs = []
+        all_t10s = []
+        for (j, grav) in enumerate(gravs):
             teffs_this = []
             t10s = []
             for teff in teffs:
                 if semimajor < np.inf:
-                    fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
                     fname = f"data/both_irradiated{tag}/irr_teff{teff}_grav{grav}_semimajor{semimajor:.2f}{fsed_str}.h5"
                     if os.path.exists(os.path.join(picaso_path, fname)):
                         with h5py.File(os.path.join(picaso_path, fname)) as f:
                             pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
                             teffs_this.append(teff)
                             t10s.append(t10(pressure, temperature))
-                elif grav != 17:
-                    teffs_this.append(teff)
-                    p, t = diamondback_pt(teff, grav, fsed)
-                    t10s.append(t10(p, t))
-                # add in Diamondback 
+                else:
+                    try:
+                        p, t = diamondback_pt(teff, grav, fsed)
+                        teffs_this.append(teff)
+                        t10s.append(t10(p, t))
+                    except FileNotFoundError:
+                        continue
+
+            all_teffs.append(teffs_this)
+            all_t10s.append(t10s)
 
             label = f"a = {semimajor} au" if semimajor < np.inf else "sonora"
             curr_ax = axs[j//3,j%3]
@@ -80,8 +90,15 @@ for fsed in [1, 2, 3, 4, 8, "nc"]:
             curr_ax.set_title(f"g = {grav} m/s/s, {fsed_str}")
             if j%3 > 0:
                 curr_ax.yaxis.set_visible(False)
-            if j//3 == 0:
+            if j//3 < 3:
                 curr_ax.xaxis.set_visible(False)
+
+        T10_table = 0.1 * np.ones((len(gravs), len(teffs)))
+        for (j, grav) in enumerate(gravs):
+            if len(all_teffs[j]) > 1:
+                T10_table[j,:] = np.interp(teffs, all_teffs[j], all_t10s[j])
+
+        np.savez(f"data/t10_tables/atm_semimajor{semimajor:.2f}_{fsed_str}{tag}.npz", logGravity=log_gravs, logTeff=np.log10(teffs), logT10=np.log10(T10_table))
 
     axs[0,0].legend(fontsize='small')
     figpath = os.path.join(picaso_path, f"figures/t10/t10_table{tag}_{fsed_str}.pdf")

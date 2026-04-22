@@ -18,7 +18,7 @@ import pandas as pd
 virga_path = "~/atmospheres/virga"
 __refdata__ = os.environ['picaso_refdata']
 
-cloud_species = ["Si02"]
+cloud_species = ["SiO2"]
 cloud_colors = ['#CC5555']
 
 picaso_path = os.path.dirname(picaso.__path__[0])
@@ -69,10 +69,10 @@ for (mh3, mh) in zip(all_feh_3, all_feh_4):
                 # tp = np.genfromtxt(tp_file)
                 # pressure, temperature = tp[:,0], tp[:,1]
                 with h5py.File(f"data/hd189/feh{mh}_co{CtoO}_rfacv{float(rfacv):.2f}.h5") as f:
-                    pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
-                grad_tp = np.diff(np.log(temperature)) / np.diff(np.log(pressure))
+                    pressure, temp_cloudless = np.array(f["pressure"]), np.array(f["temperature"])
+                grad_tp = np.diff(np.log(temp_cloudless)) / np.diff(np.log(pressure))
                 layer_pressure = np.sqrt(pressure[1:] * pressure[:-1])
-                layer_temperature = np.sqrt(temperature[1:] * temperature[:-1])
+                layer_temperature = np.sqrt(temp_cloudless[1:] * temp_cloudless[:-1])
                 adiabatic_grad = np.array([did_grad_cp(t, p, AdiabatBundle)[0] for (t, p) in zip(layer_temperature, layer_pressure)])
                 rcb_guess = np.max(np.where(grad_tp < 0.98 * adiabatic_grad)[0])
 
@@ -83,12 +83,12 @@ for (mh3, mh) in zip(all_feh_3, all_feh_4):
 
                 cl_run.star(opacity_ck, temp=5012.5,metal=0.03, logg=4.57, radius = r_star,database='phoenix', radius_unit=u.R_sun,semi_major=semi_major , semi_major_unit = u.AU)
 
-                cl_run.inputs_climate(temp_guess=np.copy(temperature), pressure=pressure, rcb_guess=rcb_guess, rfacv=float(rfacv))
+                cl_run.inputs_climate(temp_guess=np.copy(temp_cloudless), pressure=pressure, rcb_guess=rcb_guess, rfacv=float(rfacv))
                 if fsed > 0:
                     kz = np.ones_like(pressure) * 1e10 # idk
-                    virga_planet = vj.Atmosphere(["SiO2"], fsed=fsed, mh=1, mmw=2.2)
+                    virga_planet = vj.Atmosphere(["SiO2"], fsed=fsed, mh=(10**float(mh)), mmw=2.2)
                     virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
-                    virga_planet.ptk(df = pd.DataFrame({'pressure':pressure, 'temperature': temperature, 'kz': kz}), kz_min=1e5, latent_heat=True)
+                    virga_planet.ptk(df = pd.DataFrame({'pressure':pressure, 'temperature':temp_cloudless, 'kz': kz}), kz_min=1e5, latent_heat=True)
                     virga_out = vj.compute(virga_planet, as_dict=True, directory=os.path.join(virga_path, "refrind"))
                     cl_run.fix_virga_clouds(virga_out)
 
@@ -106,13 +106,10 @@ for (mh3, mh) in zip(all_feh_3, all_feh_4):
                     convective_boundary = cvz_locs[1]
                 axes[0, 0].semilogy(out["temperature"], out["pressure"], label="solution")
                 max_temp = np.max(out["temperature"])
-                axes[0, 0].semilogy(temperature, pressure, label="cloudless")
-                max_temp = max(max_temp, np.max(temperature))
-                if temp_guess is not None:
-                    axes[0, 0].semilogy(temp_guess, out["pressure"], ls="--", c='b', label="guess")
-                    max_temp = max(max_temp, np.max(temp_guess))
+                axes[0, 0].semilogy(temp_cloudless, pressure, label="cloudless")
+                max_temp = max(max_temp, np.max(temp_cloudless))
                 for (gas_name, gas_color) in zip(cloud_species, cloud_colors):
-                    p,t = vj.condensation_t(gas_name, 1, 2.2, pressure=out["pressure"])
+                    p,t = vj.condensation_t(gas_name, (10**float(mh)), 2.2, pressure=out["pressure"])
                     axes[0, 0].semilogy(t, p, c=gas_color, ls="--")
                 axes[0, 0].set_xlim((0, max_temp * 1.1))
                 axes[0, 0].set_ylim((np.min(out["pressure"]) * 0.9, np.max(out["pressure"]) * 1.1))
