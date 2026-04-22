@@ -41,7 +41,8 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bob
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
-coarse_temperatures = np.arange(800, 2401, 200)
+coarse_temperatures = np.arange(1000, 2401, 200)
+coarse_gravs = np.array([17, 31, 100, 316, 1000, 3160])
 
 # cloudmode, grav, teff, semi_major = "cloudless", 1000, 600, 0.02
 cloudmode = "cloudless"
@@ -49,13 +50,13 @@ print(f"effective temperature = {teff} K, grav = {grav} m/s/s, semimajor axis = 
 fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major:.2f}"
 
 closest_temp_ongrid = coarse_temperatures[np.argmin(np.abs(teff - coarse_temperatures))]
-if teff == closest_temp_ongrid:
-    sys.exit()
+closest_grav_ongrid = coarse_gravs[np.argmin(np.abs(grav - coarse_gravs))]
 
-fname_stem_closest = f"irr_teff{closest_temp_ongrid}_grav{grav}_semimajor{semi_major:.2f}"
+fname_stem_closest = f"irr_teff{closest_temp_ongrid}_grav{closest_grav_ongrid}_semimajor{semi_major:.2f}"
 fname = os.path.join(picaso_path, "data", "both_irradiated_withinversion", f"{fname_stem}nc.h5")
-fname_closest = os.path.join(picaso_path, "data", "both_irradiated_withinversion", f"{fname_stem_closest}nc.h5")
+fname_closest = os.path.join(picaso_path, "data", "both_irradiated", f"{fname_stem_closest}nc.h5")
 if os.path.exists(fname):
+    print("Exiting because run already complete")
     sys.exit()
 
 nstr_upper = None
@@ -96,4 +97,3 @@ with h5py.File(fname, "w") as f:
     f["pressure"] = pressure_grid
     f["temperature"] = out["temperature"]
     f.attrs["nstr_upper_init"] = nstr_upper_init
-    out_to_hdf5(out, f)
