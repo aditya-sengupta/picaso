@@ -43,7 +43,7 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bob
 # cloudmode, grav, teff, semi_major = "cloudless", 1000, 600, 0.02
 
 cloudmode = "fixed"
-print(f"effective temperature = {teff} K, grav = {grav} m/s/s, semimajor axis = {semi_major:.2f} au")
+print(f"effective temperature = {teff} K, grav = {grav} m/s/s, semimajor axis = {semi_major:.2f} au, fsed = {fsed}")
 fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major:.2f}"
 fname_stem_cloudy = fname_stem + f"fsed{fsed}"
 # unlike the cloudless case, each of these runs has to start from the exact same cloudless point
