@@ -23,7 +23,7 @@ fseds=(1 2 3 4 8)
 for teff in $(seq 800 10 2400); do
     for semimajor in "${semimajors[@]}"; do
         for fsed in "${fseds[@]}"; do
-            /home/adityars/anaconda3/envs/picaso4/bin/python scripts/cloudless_irradiated_withinversion_refined.py $1 "$teff" "$semimajor"
+            /home/adityars/anaconda3/envs/picaso4/bin/python scripts/cloudless_irradiated_withinversion_refined.py $1 "$teff" "$semimajor" "$fsed"
         done
     done
 done

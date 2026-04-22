@@ -46,7 +46,6 @@ cloudmode = "fixed"
 print(f"effective temperature = {teff} K, grav = {grav} m/s/s, semimajor axis = {semi_major:.2f} au")
 fname_stem = f"irr_teff{teff}_grav{grav}_semimajor{semi_major:.2f}"
 fname_stem_cloudy = fname_stem + f"fsed{fsed}"
-fname_stem_closest = f"irr_teff{closest_temp_ongrid}_grav{closest_grav_ongrid}_semimajor{semi_major:.2f}"
 # unlike the cloudless case, each of these runs has to start from the exact same cloudless point
 fname_cloudless = os.path.join(picaso_path, "data", "both_irradiated_withinversion", f"{fname_stem}nc.h5")
 fname = os.path.join(picaso_path, "data", "both_irradiated_withinversion", f"{fname_stem_cloudy}.h5")
