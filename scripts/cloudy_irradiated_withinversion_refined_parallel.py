@@ -24,7 +24,7 @@ import gc
 from mpi4py import MPI
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
-virga_path = "~/atmospheres/virga/"
+virga_path = "/home/adityars/virga/"
 
 picaso_path = os.path.dirname(picaso.__path__[0])
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids', 'bobcat')
