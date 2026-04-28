@@ -44,7 +44,7 @@ def t10(p_col, t_col):
     return float(solver.y[0])
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in [1, 2, 3, 4, 8, "nc"]:
+for fsed in [1, 2, 3, 4, 8]:
     fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(4, 3, figsize=(8, 10))
     #log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
@@ -75,6 +75,9 @@ for fsed in [1, 2, 3, 4, 8, "nc"]:
                                 pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
                                 teffs_this.append(teff)
                                 t10s.append(t10(pressure, temperature))
+                    else:
+                        if fsed == "nc":
+                            print(fname)
                 else:
                     try:
                         p, t = diamondback_pt(teff, grav, fsed)
@@ -88,7 +91,7 @@ for fsed in [1, 2, 3, 4, 8, "nc"]:
 
             label = f"a = {semimajor} au" if semimajor < np.inf else "sonora"
             curr_ax = axs[j//3,j%3]
-            curr_ax.scatter(teffs_this, t10s, color=c, label=label, s=2)
+            curr_ax.plot(teffs_this, t10s, color=c, label=label)
             # lw=1 if semimajor < np.inf else 2
             curr_ax.invert_yaxis()
             axs[-1,j%3].set_xlabel("Tint (K)")
@@ -111,7 +114,7 @@ for fsed in [1, 2, 3, 4, 8, "nc"]:
 
     axs[0,0].legend(fontsize='small')
     figpath = os.path.join(picaso_path, f"figures/t10/t10_table{tag}_{fsed_str}.png")
-    plt.savefig(figpath)
+    plt.savefig(figpath, dpi=600)
     print(figpath)
     plt.close(fig)
 
