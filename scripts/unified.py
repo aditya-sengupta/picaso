@@ -146,8 +146,8 @@ def run(grav, tint, semi_major, fsed):
                 with h5py.File(upper_neighbor) as f:
                     nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
 
-            nstr_upper_init = nstr_upper
-            temp_guess_init = np.copy(temp_guess)
+        nstr_upper_init = nstr_upper
+        temp_guess_init = np.copy(temp_guess)
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
 
         calc_type = "planet" if semi_major > 0 else "browndwarf"
@@ -173,14 +173,13 @@ def run(grav, tint, semi_major, fsed):
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
+            f.attrs["nstr_upper_init"] = nstr_upper_init
+            f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
             if save == "full":
                 out_to_hdf5(out, f)
             else:
                 f["pressure"] = pressure_grid
                 f["temperature"] = out["temperature"]
-                f["temp_guess"] = temp_guess_init
-                f.attrs["nstr_upper_init"] = nstr_upper_init
-                f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
                 f["cvz_locs"] = out["cvz_locs"]
                 f["spectrum_output_thermal"] = out["spectrum_output"]["thermal"]
                 f["spectrum_output_wavenumber"] = out["spectrum_output"]["wavenumber"]
@@ -192,8 +191,7 @@ def run(grav, tint, semi_major, fsed):
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
         
         # Clean up local variables
-        del cl_run, opacity_ck, virga_planet, virga_out, out
-        del temp_guess, kz
+        del cl_run, opacity_ck, out, temp_guess
         gc.collect()
         
         return True
