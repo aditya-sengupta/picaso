@@ -35,7 +35,9 @@ parser.add_argument('sweep')
 parser.add_argument('do_cloudy')
 parser.add_argument('full_save')
 args = parser.parse_args()
-sweep, do_cloudy, do_irradiated. full_save = str(args.sweep), bool(args.do_cloudy), bool(args.do_irradiated), bool(args.full_save)
+sweep, do_cloudy. full_save = str(args.sweep), bool(args.do_cloudy), bool(args.full_save)
+
+print(f"Starting run with {sweep = }, {do_cloudy = }, {full_save = }")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
