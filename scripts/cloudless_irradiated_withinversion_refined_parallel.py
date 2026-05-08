@@ -43,7 +43,7 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bob
 
 cloudmode = "cloudless"
 
-coarse_temperatures = np.arange(200, 2401, 200)
+coarse_temperatures = np.arange(1200, 2401, 200)
 coarse_gravs = np.array([10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160])
 
 def run(grav, teff, semi_major):
@@ -61,16 +61,15 @@ def run(grav, teff, semi_major):
             print(f"[{grav}, {teff}, {semi_major}] Skipping - already complete")
             return True
 
-        nstr_upper = None
         with h5py.File(fname_closest) as f:
             pressure_grid = np.array(f["pressure"])
             temp_guess = np.array(f["temperature"])
-            nstr_upper = f.attrs["nstr_upper_init"]
 
+        # The comment here held up before when I was pulling the RCB from the closest run, but now I'm starting these ones from the bottom
         # In case clouds make the RCB sink a bit, we want to allow this much
         # This is unmotivated and we may find it should go even deeper
         # However, having observed that the RCB tends to track the cloud base, I think it's fine
-        nstr_upper += 5
+        nstr_upper = 89
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
@@ -96,8 +95,8 @@ def run(grav, teff, semi_major):
         print(f"[{grav}, {teff}, {semi_major}] ✓ Saved to disk")
         
         # Clean up local variables
-        del cl_run, opacity_ck, virga_planet, virga_out, out
-        del pressure_grid, temp_guess, temp_for_virga, kz
+        del cl_run, opacity_ck, out
+        del pressure_grid, temp_guess
         gc.collect()
         
         return True
@@ -110,7 +109,7 @@ def run(grav, teff, semi_major):
 def generate_tasks():
     """Generate all task tuples without storing them all in memory."""
     for grav in [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]:
-        for teff in np.arange(10, 2401, 10):
+        for teff in np.arange(200, 1001, 10):
             for semi_major in [0.02, 0.04, 0.13, 0.5]:
                     yield (grav, teff, semi_major)
 

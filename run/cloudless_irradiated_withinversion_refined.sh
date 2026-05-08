@@ -19,7 +19,7 @@ teffs=(1000 1200 1400 1600 1800 2000 2200 2400)
 # gravs=(17 31 100 316 1000 3160)
 semimajors=(0.02 0.04 0.13 0.50)
 
-for teff in $(seq 200 10 2400); do
+for teff in $(seq 10 10 200); do
     for semimajor in "${semimajors[@]}"; do
         /home/adityars/anaconda3/envs/picaso4/bin/python scripts/cloudless_irradiated_withinversion_refined.py $1 "$teff" "$semimajor"
     done
