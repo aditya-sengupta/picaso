@@ -32,12 +32,12 @@ from load_diamondback import diamondback_pt
 
 parser = argparse.ArgumentParser()
 parser.add_argument('sweep')
-parser.add_argument('do_cloudy')
-parser.add_argument('full_save')
+parser.add_argument('cloudy')
+parser.add_argument('save')
 args = parser.parse_args()
 sweep, cloudy, save = str(args.sweep), bool(args.do_cloudy), bool(args.full_save)
 
-print(f"Starting run with {sweep = }, {do_cloudy = }, {full_save = }")
+print(f"Starting run with {sweep = }, {cloudy = }, {save = }")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
