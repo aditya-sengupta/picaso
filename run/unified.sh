@@ -14,9 +14,9 @@ pwd; hostname; date
 
 module load python
 module load openmpi
-mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse False True # Bobcat+Mukherjee+26 match
-mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse True True # Diamondback match+irradiated
-mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine False False # full cloudless grid, finer but with less information
-mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine True False # full cloudy grid, finer but with less information
+mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudless full # Bobcat+Mukherjee+26 match
+mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudy full # Diamondback match+irradiated
+mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudless partial # full cloudless grid, finer but with less information
+mpiexec -n 320 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudy partial # full cloudy grid, finer but with less information
 
 date

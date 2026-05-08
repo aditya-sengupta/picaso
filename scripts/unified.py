@@ -35,7 +35,7 @@ parser.add_argument('sweep')
 parser.add_argument('do_cloudy')
 parser.add_argument('full_save')
 args = parser.parse_args()
-sweep, do_cloudy. full_save = str(args.sweep), bool(args.do_cloudy), bool(args.full_save)
+sweep, cloudy, save = str(args.sweep), bool(args.do_cloudy), bool(args.full_save)
 
 print(f"Starting run with {sweep = }, {do_cloudy = }, {full_save = }")
 
@@ -64,7 +64,7 @@ np.random.shuffle(tints)
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
 
-if do_cloudy:
+if cloudy == "cloudy":
     fseds = [-1, 1, 2, 3, 4, 8]
 else:
     fseds = [-1]
@@ -103,7 +103,7 @@ def run(grav, tint, semi_major, fsed):
             cloudmode = "fixed"
             fname_cloudless = fname_from_params(grav, tint, semi_major, -1)
             if not os.path.exists(fname_cloudless):
-                print(f"[{grav}, {teff}, {semi_major}, {fsed}] Skipping - cloudless model unavailable")
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - cloudless model unavailable")
                 return False
         else:
             cloudmode = "cloudless"
@@ -112,7 +112,7 @@ def run(grav, tint, semi_major, fsed):
         fname = fname_from_params(grav, tint, semi_major, fsed)
         # I'll work out how I want to handle reruns later, for now we can skip existing files
         if os.path.exists(fname):
-            print(f"[{grav}, {teff}, {semi_major}, {fsed}] Skipping - already complete")
+            print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - already complete")
             return True
 
         temp_guess = None
@@ -146,11 +146,11 @@ def run(grav, tint, semi_major, fsed):
 
             nstr_upper_init = nstr_upper
             temp_guess_init = np.copy(temp_guess)
-        print(f"[{grav}, {teff}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
+        print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
 
         cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
         cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
-        cl_run.effective_temp(teff) # input effective temperature
+        cl_run.effective_temp(tint) # input effective temperature
         opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
 
         if semi_major > 0:
@@ -168,7 +168,7 @@ def run(grav, tint, semi_major, fsed):
 
         out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
         
-        if full_save:
+        if save == "full":
             with h5py.File(fname, "w") as f:
                 out_to_hdf5(out, f)
         else:
@@ -185,7 +185,7 @@ def run(grav, tint, semi_major, fsed):
                     for k in ["opd_per_layer", "asymmetry", "single_scattering", "condensate_mmr"]:
                         f[k] = virga_out[k]
         
-        print(f"[{grav}, {teff}, {semi_major}, {fsed}] ✓ Saved to disk")
+        print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
         
         # Clean up local variables
         del cl_run, opacity_ck, virga_planet, virga_out, out
@@ -195,7 +195,7 @@ def run(grav, tint, semi_major, fsed):
         return True
         
     except Exception as e:
-        print(f"[{grav}, {teff}, {semi_major}, {fsed}] ✗ Error: {e}")
+        print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
         gc.collect()
         return False
 
@@ -222,10 +222,10 @@ def run_through_loop(num_threads=10):
     local_completed = 0
     local_failed = 0
     
-    for i, (grav, teff, semi_major, fsed) in enumerate(tasks):
+    for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
         # Only process tasks assigned to this rank
         if i % size == rank:
-            result = run(grav, teff, semi_major, fsed)
+            result = run(grav, tint, semi_major, fsed)
             if result:
                 local_completed += 1
             else:
