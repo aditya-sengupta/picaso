@@ -44,15 +44,15 @@ def t10(p_col, t_col):
     return float(solver.y[0])
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in [1, 2, 3, 4, 8]:
+for fsed in ["nc"]:
     fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(4, 3, figsize=(8, 10))
     #log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
     #gravs = [17, 31, 100, 316, 1000, 3160]
     log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
     gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
-    semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
-    teffs = np.arange(200, 2401, 10)
+    semimajors = [0.02, 0.04, 0.13, 0.5]
+    teffs = np.arange(100, 2401, 10)
     cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]
 
     for (semimajor, c) in zip(semimajors, cmap):
@@ -68,16 +68,16 @@ for fsed in [1, 2, 3, 4, 8]:
                     count_all += 1
                     count_all_overall += 1
                     if os.path.exists(os.path.join(picaso_path, fname)):
-                        with h5py.File(os.path.join(picaso_path, fname)) as f:
-                            if "pressure" in f:
-                                count_available += 1
-                                count_available_overall += 1
-                                pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
-                                teffs_this.append(teff)
-                                t10s.append(t10(pressure, temperature))
-                    else:
-                        if fsed == "nc":
-                            print(fname)
+                        try:
+                            with h5py.File(os.path.join(picaso_path, fname)) as f:
+                                if "pressure" in f:
+                                    count_available += 1
+                                    count_available_overall += 1
+                                    pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
+                                    teffs_this.append(teff)
+                                    t10s.append(t10(pressure, temperature))
+                        except Exception:
+                            continue
                 else:
                     try:
                         p, t = diamondback_pt(teff, grav, fsed)
