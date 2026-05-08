@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from functools import reduce
 
-diamondback_datapath = "/Users/adityasengupta/picaso/reference/sonora_grids"
+diamondback_datapath = os.path.join(os.getenv('picaso_refdata'), 'sonora_grids')
 lmap = lambda f, x: list(map(f, x))
 
 def read_diamondback_structure(teff, grav_ms2, fsed):
