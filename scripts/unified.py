@@ -34,7 +34,7 @@ parser.add_argument('sweep')
 parser.add_argument('cloudy')
 parser.add_argument('save')
 args = parser.parse_args()
-sweep, cloudy, save = str(args.sweep), bool(args.cloudy), bool(args.save)
+sweep, cloudy, save = str(args.sweep), str(args.cloudy), str(args.save)
 
 print(f"Starting run with {sweep = }, {cloudy = }, {save = }")
 
@@ -54,7 +54,7 @@ ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', ck_
 
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
-bobcat_gravs = [17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160]
+bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
@@ -150,14 +150,15 @@ def run(grav, tint, semi_major, fsed):
             temp_guess_init = np.copy(temp_guess)
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
 
-        cl_run = jdi.inputs(calculation="planet", climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
+        calc_type = "planet" if semi_major > 0 else "browndwarf"
+        cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
         cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
         cl_run.effective_temp(tint) # input effective temperature
         opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
 
         if semi_major > 0:
             cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
-            rfacv = 0.5
+        rfacv = 0.5
 
         cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
         if fsed > 0:
@@ -192,7 +193,7 @@ def run(grav, tint, semi_major, fsed):
         
         # Clean up local variables
         del cl_run, opacity_ck, virga_planet, virga_out, out
-        del pressure_grid, temp_guess, temp_for_virga, kz
+        del temp_guess, kz
         gc.collect()
         
         return True
