@@ -28,14 +28,13 @@ from mpi4py import MPI
 
 sys.path.append(".")
 from out_to_hdf5 import out_to_hdf5
-from load_diamondback import diamondback_pt
 
 parser = argparse.ArgumentParser()
 parser.add_argument('sweep')
 parser.add_argument('cloudy')
 parser.add_argument('save')
 args = parser.parse_args()
-sweep, cloudy, save = str(args.sweep), bool(args.do_cloudy), bool(args.full_save)
+sweep, cloudy, save = str(args.sweep), bool(args.cloudy), bool(args.save)
 
 print(f"Starting run with {sweep = }, {cloudy = }, {save = }")
 
@@ -54,6 +53,8 @@ ck_stem += ".hdf5"
 ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', ck_stem)
 
 sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
+bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
+bobcat_gravs = [17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160]
 
 # effective^4 = equilibrium^4 + intrinsic^4
 
@@ -125,8 +126,9 @@ def run(grav, tint, semi_major, fsed):
                 # This is unmotivated and we may find it should go even deeper
                 # However, having observed that the RCB tends to track the cloud base, I think it's fine
         else:
-            pressure_db, temp_db = read_diamondback_structure(tint, grav, fsed)
-            temp_guess = np.interp(pressure_grid, pressure_db, temp_db) # closest Diamondback, resampled on the pressure grid we're using in this work
+            teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
+            pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
+            temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work
             nstr_upper = 89
 
         # we're going to look for neighbors on the coarse grid
@@ -168,13 +170,14 @@ def run(grav, tint, semi_major, fsed):
 
         out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
         
-        if save == "full":
-            with h5py.File(fname, "w") as f:
+        with h5py.File(fname, "w") as f:
+            f["temp_guess"] = temp_guess_init
+            if save == "full":
                 out_to_hdf5(out, f)
-        else:
-            with h5py.File(fname, "w") as f:
+            else:
                 f["pressure"] = pressure_grid
                 f["temperature"] = out["temperature"]
+                f["temp_guess"] = temp_guess_init
                 f.attrs["nstr_upper_init"] = nstr_upper_init
                 f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
                 f["cvz_locs"] = out["cvz_locs"]
