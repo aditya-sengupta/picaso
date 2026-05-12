@@ -44,14 +44,14 @@ def t10(p_col, t_col):
     return float(solver.y[0])
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in ["nc"]:
+for fsed in ["nc", 1, 2, 3, 4, 8]:
     fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(4, 3, figsize=(8, 10))
     #log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
     #gravs = [17, 31, 100, 316, 1000, 3160]
     log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
     gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
-    semimajors = [0.02, 0.04, 0.13, 0.5]
+    semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
     teffs = np.arange(100, 2401, 10)
     cmap = cm.magma(np.linspace(0, 1, len(semimajors)+1))[:-1]
 
@@ -63,33 +63,26 @@ for fsed in ["nc"]:
             teffs_this = []
             t10s = []
             for teff in teffs:
-                if semimajor < np.inf:
-                    fname = f"data/both_irradiated{tag}/irr_teff{teff}_grav{grav}_semimajor{semimajor:.2f}{fsed_str}.h5"
-                    count_all += 1
-                    count_all_overall += 1
-                    if os.path.exists(os.path.join(picaso_path, fname)):
-                        try:
-                            with h5py.File(os.path.join(picaso_path, fname)) as f:
-                                if "pressure" in f:
-                                    count_available += 1
-                                    count_available_overall += 1
-                                    pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
-                                    teffs_this.append(teff)
-                                    t10s.append(t10(pressure, temperature))
-                        except Exception:
-                            continue
-                else:
+                semimajor_str = "ns" if semimajor == np.inf else f"semimajor{semimajor:.2f}"
+                fname = f"data/unified/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
+                count_all += 1
+                count_all_overall += 1
+                if os.path.exists(os.path.join(picaso_path, fname)):
                     try:
-                        p, t = diamondback_pt(teff, grav, fsed)
-                        teffs_this.append(teff)
-                        t10s.append(t10(p, t))
-                    except FileNotFoundError:
+                        with h5py.File(os.path.join(picaso_path, fname)) as f:
+                            if "pressure" in f:
+                                count_available += 1
+                                count_available_overall += 1
+                                pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
+                                teffs_this.append(teff)
+                                t10s.append(t10(pressure, temperature))
+                    except Exception:
                         continue
 
             all_teffs.append(teffs_this)
             all_t10s.append(t10s)
 
-            label = f"a = {semimajor} au" if semimajor < np.inf else "sonora"
+            label = f"a = {semimajor} au" if semimajor < np.inf else "no star"
             curr_ax = axs[j//3,j%3]
             curr_ax.plot(teffs_this, t10s, color=c, label=label)
             # lw=1 if semimajor < np.inf else 2
