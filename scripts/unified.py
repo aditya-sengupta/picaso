@@ -25,6 +25,10 @@ from datetime import datetime
 import h5py
 import gc
 from mpi4py import MPI
+from scipy.integrate import ode
+from picaso.grad import did_grad_cp
+from collections import namedtuple
+import json
 
 sys.path.append(".")
 from out_to_hdf5 import out_to_hdf5
@@ -43,7 +47,7 @@ cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
 
 picaso_path = os.path.dirname(picaso.__path__[0])
-sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids', 'bobcat')
+__refdata__ = os.getenv('picaso_refdata')
 
 mh = '0.0'
 CtoO = '0.46'
@@ -51,9 +55,9 @@ nlevel = 91
 pressure_grid = np.logspace(-4, 3 + np.log10(3), nlevel)
 ck_stem = f'sonora_2121grid_feh{mh}_co{CtoO}'
 ck_stem += ".hdf5"
-ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', ck_stem)
+ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 
-sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
+sonora_profile_db = os.path.join(__refdata__,'sonora_grids','bobcat')
 bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
@@ -87,6 +91,27 @@ def semi_major_str(semi_major):
 def fname_from_params(grav, tint, semi_major, fsed):
     fname_stem = f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_{fsed_str(fsed)}"
     return os.path.join(picaso_path, "data", "unified", f"{fname_stem}.h5")
+
+cp_grad = json.load(open(os.path.join(__refdata__,'climate_INPUTS','specific_heat_p_adiabat_grad.json')))
+
+AdiabatBundle = namedtuple('AdiabatBundle', ['t_table', 'p_table', 'grad','cp'])
+AdiabatBundle = AdiabatBundle(
+    np.array(cp_grad['temperature']),
+    np.array(cp_grad['pressure']),
+    np.array(cp_grad['adiabat_grad']),
+    np.array(cp_grad['specific_heat'])
+)
+
+def _dTdp(p, t):
+    grad_x, _ = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)
+    return float(grad_x) * t / p
+
+def t10(p_col, t_col):
+    solver = ode(_dTdp).set_integrator('dopri5', rtol=1e-8, atol=1e-8, nsteps=5000)
+    idx = np.where(t_col < 5199)[0][-1]
+    solver.set_initial_value(t_col[idx], p_col[idx])
+    solver.integrate(10.0)
+    return float(solver.y[0])
 
 def generate_tasks():
     """Generate all task tuples without storing them all in memory."""
@@ -124,7 +149,12 @@ def run(grav, tint, semi_major, fsed):
         if fsed > 0:
             with h5py.File(fname_cloudless) as f:
                 temp_guess = np.array(f["temperature"])
-                nstr_upper = f.attrs["nstr_upper_init"] + 5
+                cvz_locs = np.array(f["cvz_locs"])
+                if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
+                    nstr_upper = cvz_locs[-2]
+                else:
+                    nstr_upper = cvz_locs[1]
+                nstr_upper += 5
                 # In case clouds make the RCB sink a bit, we want to allow this much
                 # This is unmotivated and we may find it should go even deeper
                 # However, having observed that the RCB tends to track the cloud base, I think it's fine
@@ -141,12 +171,7 @@ def run(grav, tint, semi_major, fsed):
 
             with h5py.File(fname_from_params(grav, tint_hottest, semi_major, fsed)) as f:
                 temp_guess = np.array(f["temperature"])
-                cvz_locs = np.array(f["cvz_locs"])
-                if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
-                    nstr_upper = cvz_locs[-2]
-                else:
-                    nstr_upper = cvz_locs[1]
-
+                
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
         # because it would've thrown an error when the file exists
@@ -192,6 +217,7 @@ def run(grav, tint, semi_major, fsed):
             f["temp_guess"] = temp_guess_init
             f.attrs["nstr_upper_init"] = nstr_upper_init
             f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
+            f.attrs["t10"] = t10(pressure_grid, out["temperature"])
             if save == "full":
                 out_to_hdf5(out, f)
             else:
