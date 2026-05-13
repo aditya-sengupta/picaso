@@ -60,8 +60,7 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = [200] # np.arange(100, 2401, step)
-np.random.shuffle(tints)
+tints = np.arange(300, 2401, step)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
@@ -130,31 +129,39 @@ def run(grav, tint, semi_major, fsed):
                 # This is unmotivated and we may find it should go even deeper
                 # However, having observed that the RCB tends to track the cloud base, I think it's fine
         else:
-            teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
+            """teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
             pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
-            temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work
-            nstr_upper = 89
+            temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work"""
+            # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
+            # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
+            tint_hottest = 200 # I'm asserting that there's 200K models available for every point
+            for tint_initial in tints:
+                if os.path.exists(fname_from_params(grav, tint_initial, semi_major, fsed)):
+                    tint_hottest = tint_initial
+
+            with h5py.File(fname_from_params(grav, tint_hottest, semi_major, fsed)) as f:
+                temp_guess = np.array(f["temperature"])
+                cvz_locs = np.array(f["cvz_locs"])
+                if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
+                    nstr_upper = cvz_locs[-2]
+                else:
+                    nstr_upper = cvz_locs[1]
 
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
         # because it would've thrown an error when the file exists
         # if we happen to end up here, we simply won't do any of this
 
-        # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
-        with h5py.File(fname_from_params(grav, 800, semi_major, fsed)) as f:
-            temp_guess = np.array(f["temperature"])
-
-        if False:
-            lower_temperature, upper_temperature = 100 * (tint // 100), 100 * (tint // 100 + 1)
-            if lower_temperature != tint and upper_temperature != tint:
-                lower_neighbor = fname_from_params(grav, 100 * (tint // 100), semi_major, fsed)
-                upper_neighbor = fname_from_params(grav, 100 * (tint // 100 + 1), semi_major, fsed)
-                
-                if os.path.exists(lower_neighbor) and os.path.exists(upper_neighbor):
-                    with h5py.File(lower_neighbor) as f:
-                        nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
-                    with h5py.File(upper_neighbor) as f:
-                        nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
+        lower_temperature, upper_temperature = 100 * (tint // 100), 100 * (tint // 100 + 1)
+        if lower_temperature != tint and upper_temperature != tint:
+            lower_neighbor = fname_from_params(grav, 100 * (tint // 100), semi_major, fsed)
+            upper_neighbor = fname_from_params(grav, 100 * (tint // 100 + 1), semi_major, fsed)
+            
+            if os.path.exists(lower_neighbor) and os.path.exists(upper_neighbor):
+                with h5py.File(lower_neighbor) as f:
+                    nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
+                with h5py.File(upper_neighbor) as f:
+                    nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
