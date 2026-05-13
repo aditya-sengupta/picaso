@@ -30,7 +30,7 @@ using Roots
 
 # ╔═╡ b7ae2f3d-3e5a-4121-b485-9f75e66ce6db
 begin
-	pressure_axis = 10 .^ (-4:(7/90):3)
+	pressure_axis = 10 .^ (-4:(7/90):(3+log10(3)))
 	mgsio3_cond_curve = map(p -> find_zero(T -> 10.0^(13.43 - 28665.0/T) - p*2.92e-5, (10, 8000)), pressure_axis)
 	mg2sio4_cond_curve = map(p -> find_zero(T -> 10.0^(-32488/T + 14.88 - 0.2*log10(p)) - p*3.063e-5, (10, 8000)), pressure_axis)
 	fe_cond_curve = map(p -> find_zero(T -> 10.0^(-20995/T + 7.09) - p*5.095e-5, (10, 8000)), pressure_axis)
@@ -38,7 +38,7 @@ begin
 end;
 
 # ╔═╡ 2ef0b5fc-078e-4f45-864d-30f5602e6d1f
-@bind teff Slider(200:10:2400)
+@bind teff Slider(100:100:2400)
 
 # ╔═╡ 8d8e1879-1dc6-4058-8599-fdf7e601f09f
 @bind logg Slider(3.0:0.25:5.5)
@@ -52,18 +52,19 @@ end;
 
 # ╔═╡ 70ab8aff-bbbe-4ab4-81d0-b58fd2ce85ed
 begin
-	p = plot(legend=:topright, title="teff=$teff K, grav=$g m/s²")
+	p = plot(legend=:topright, title="teff=$teff K, grav=$g m/s²", yflip=true, yscale=:log10, xlims=(0, 5199))
 	plot!(mgsio3_cond_curve, pressure_axis, label="MgSiO₃", ls=:dash, color="#CC5555")
 	plot!(mg2sio4_cond_curve, pressure_axis, label="Mg₂SiO₄", ls=:dash, color="#3BA39C")
 	plot!(fe_cond_curve, pressure_axis, label="Fe", ls=:dash, color="#CCB84D")
 	plot!(al2o3_cond_curve, pressure_axis, label="Al₂O₃", ls=:dash, color="#FF8C00")
-	for (j, semimajor) in enumerate(["0.02", "0.04", "0.13", "0.50"])
+	for (j, semimajor) in enumerate(["0.02", "0.04", "0.13", "0.50", "inf"])
+		semimajor_str = semimajor == "inf" ? "ns" : "semimajor$(semimajor)"
 		# "fsed1", "fsed2", "fsed3", "fsed4", "fsed8",
 		for (i, fstr) in enumerate(["nc"])
-			fname = "/Users/adityasengupta/picaso/data/both_irradiated_withinversion/irr_teff$(teff)_grav$(g)_semimajor$(semimajor)$(fstr).h5"
+			fname = "/Users/adityasengupta/picaso/data/unified/unified_tint$(teff)_grav$(g)_$(semimajor_str)_$(fstr).h5"
 			if isfile(fname)
 				f = h5open(fname);
-				plot!(Array(f["temperature"]), Array(f["pressure"]), yflip=true, yscale=:log10, ylims=(1e-4, 1e3), label="a = " * string(semimajor) * "au, nstr_upper = " * string(attrs(f)["nstr_upper_init"]), xlims=(0, 5199), color=(cgrad(:berlin10)[1-j/4]), alpha=(1-i/7))
+				plot!(Array(f["temperature"]), Array(f["pressure"]), yflip=true, yscale=:log10, ylims=(1e-4, 3e3), label="a = " * string(semimajor) * " au, nstr_upper = " * string(attrs(f)["nstr_upper_init"]), xlims=(0, 5199), color=(cgrad(:berlin10)[1-j/4]), alpha=(1-i/7))
 			end
 		end
 	end

@@ -33,8 +33,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('sweep')
 parser.add_argument('cloudy')
 parser.add_argument('save')
+parser.add_argument('rerun')
 args = parser.parse_args()
-sweep, cloudy, save = str(args.sweep), str(args.cloudy), str(args.save)
+sweep, cloudy, save, rerun = str(args.sweep), str(args.cloudy), str(args.save), str(args.rerun)
 
 print(f"Starting run with {sweep = }, {cloudy = }, {save = }")
 
@@ -47,7 +48,7 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids', 'bo
 mh = '0.0'
 CtoO = '0.46'
 nlevel = 91
-pressure_grid = np.logspace(-4, 3, nlevel)
+pressure_grid = np.logspace(-4, 3 + np.log10(3), nlevel)
 ck_stem = f'sonora_2121grid_feh{mh}_co{CtoO}'
 ck_stem += ".hdf5"
 ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', ck_stem)
@@ -59,7 +60,7 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = np.arange(100, 2401, step)
+tints = [200] # np.arange(100, 2401, step)
 np.random.shuffle(tints)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
@@ -113,8 +114,11 @@ def run(grav, tint, semi_major, fsed):
         fname = fname_from_params(grav, tint, semi_major, fsed)
         # I'll work out how I want to handle reruns later, for now we can skip existing files
         if os.path.exists(fname):
-            print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - already complete")
-            return True
+            if rerun == "rerun":
+                os.remove(fname)
+            else:
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - already complete")
+                return True
 
         temp_guess = None
         nstr_upper = None
@@ -135,16 +139,22 @@ def run(grav, tint, semi_major, fsed):
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
         # because it would've thrown an error when the file exists
         # if we happen to end up here, we simply won't do any of this
-        lower_temperature, upper_temperature = 100 * (tint // 100), 100 * (tint // 100 + 1)
-        if lower_temperature != tint and upper_temperature != tint:
-            lower_neighbor = fname_from_params(grav, 100 * (tint // 100), semi_major, fsed)
-            upper_neighbor = fname_from_params(grav, 100 * (tint // 100 + 1), semi_major, fsed)
-            
-            if os.path.exists(lower_neighbor) and os.path.exists(upper_neighbor):
-                with h5py.File(lower_neighbor) as f:
-                    nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
-                with h5py.File(upper_neighbor) as f:
-                    nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
+
+        # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
+        with h5py.File(fname_from_params(grav, 800, semi_major, fsed)) as f:
+            temp_guess = np.array(f["temperature"])
+
+        if False:
+            lower_temperature, upper_temperature = 100 * (tint // 100), 100 * (tint // 100 + 1)
+            if lower_temperature != tint and upper_temperature != tint:
+                lower_neighbor = fname_from_params(grav, 100 * (tint // 100), semi_major, fsed)
+                upper_neighbor = fname_from_params(grav, 100 * (tint // 100 + 1), semi_major, fsed)
+                
+                if os.path.exists(lower_neighbor) and os.path.exists(upper_neighbor):
+                    with h5py.File(lower_neighbor) as f:
+                        nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
+                    with h5py.File(upper_neighbor) as f:
+                        nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
