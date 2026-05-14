@@ -200,7 +200,8 @@ def run(grav, tint, semi_major, fsed):
         cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
         cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
         cl_run.effective_temp(tint) # input effective temperature
-        opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted') # grab your opacities
+        gases_fly = ['CO','CH4','H2O','NH3','CO2','N2','HCN','H2','C2H2','C2H4','C2H6','Na','K','PH3','FeH','SO2','H2S']
+        opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
 
         if semi_major > 0:
             cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
@@ -216,7 +217,7 @@ def run(grav, tint, semi_major, fsed):
             cl_run.fix_virga_clouds(virga_out)
 
         cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=True)
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init

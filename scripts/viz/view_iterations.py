@@ -41,8 +41,8 @@ AdiabatBundle = AdiabatBundle(
 )
 
 # %%
-grav, tint = 562, 300
-semi_major, fsed = 0.02, -1
+grav, tint = 316, 1100
+semi_major, fsed = -1, -1
 semi_major_str_plotout = f"semimajor = {semi_major} au" if semi_major > 0 else "no star"
 fsed_str_plotout = f"fsed = {fsed}" if fsed > 0 else "no cloud"
 
