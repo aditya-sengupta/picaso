@@ -41,7 +41,7 @@ parser.add_argument('rerun')
 args = parser.parse_args()
 sweep, cloudy, save, rerun = str(args.sweep), str(args.cloudy), str(args.save), str(args.rerun)
 
-print(f"Starting run with {sweep = }, {cloudy = }, {save = }")
+print(f"Starting run with {sweep = }, {cloudy = }, {save = }, {rerun = }")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
@@ -64,7 +64,9 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = [300] # np.arange(300, 2401, step)
+tints = np.arange(100, 2401, step)
+np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
+np.random.shuffle(tints)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
@@ -164,10 +166,11 @@ def run(grav, tint, semi_major, fsed):
             temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work"""
             # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
             # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
-            tint_hottest = 200 # I'm asserting that there's 200K models available for every point
-            for tint_initial in tints:
-                if tint_initial < tint and os.path.exists(fname_from_params(grav, tint_initial, semi_major, fsed)):
-                    tint_hottest = tint_initial
+            # 2026-05-14: there's still strange jumps, but 300K seems to have run well for every logg/semimajor, so I'm starting them all from there
+            tint_hottest = 300 # I'm asserting that there's 300K models available for every point
+            #for tint_initial in tints:
+            #    if tint_initial < tint and os.path.exists(fname_from_params(grav, tint_initial, semi_major, fsed)):
+            #        tint_hottest = tint_initial
 
             with h5py.File(fname_from_params(grav, tint_hottest, semi_major, fsed)) as f:
                 temp_guess = np.array(f["temperature"])
@@ -213,7 +216,7 @@ def run(grav, tint, semi_major, fsed):
             cl_run.fix_virga_clouds(virga_out)
 
         cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
