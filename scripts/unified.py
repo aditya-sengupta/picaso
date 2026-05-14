@@ -65,7 +65,7 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
 step = 100 if sweep == "coarse" else 10
 tints = np.arange(100, 2401, step)
-np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
+tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
 np.random.shuffle(tints)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
