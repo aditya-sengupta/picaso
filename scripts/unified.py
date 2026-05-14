@@ -64,7 +64,7 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = np.arange(300, 2401, step)
+tints = [300] # np.arange(300, 2401, step)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
@@ -166,11 +166,12 @@ def run(grav, tint, semi_major, fsed):
             # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
             tint_hottest = 200 # I'm asserting that there's 200K models available for every point
             for tint_initial in tints:
-                if os.path.exists(fname_from_params(grav, tint_initial, semi_major, fsed)):
+                if tint_initial < tint and os.path.exists(fname_from_params(grav, tint_initial, semi_major, fsed)):
                     tint_hottest = tint_initial
 
             with h5py.File(fname_from_params(grav, tint_hottest, semi_major, fsed)) as f:
                 temp_guess = np.array(f["temperature"])
+                nstr_upper = 89
                 
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
@@ -211,6 +212,7 @@ def run(grav, tint, semi_major, fsed):
             virga_out = vj.compute(virga_planet, as_dict=True, directory=os.path.join(virga_path, "refrind"))
             cl_run.fix_virga_clouds(virga_out)
 
+        cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
         out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True)
         
         with h5py.File(fname, "w") as f:
