@@ -36,12 +36,13 @@ from out_to_hdf5 import out_to_hdf5
 parser = argparse.ArgumentParser()
 parser.add_argument('sweep')
 parser.add_argument('cloudy')
+parser.add_argument('irradiated')
 parser.add_argument('save')
 parser.add_argument('rerun')
 args = parser.parse_args()
-sweep, cloudy, save, rerun = str(args.sweep), str(args.cloudy), str(args.save), str(args.rerun)
+sweep, cloudy, irradiated, save, rerun = str(args.sweep), str(args.cloudy), str(args.irradiated), str(args.save), str(args.rerun)
 
-print(f"Starting run with {sweep = }, {cloudy = }, {save = }, {rerun = }")
+print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = }")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
@@ -64,11 +65,11 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = [1100] # np.arange(100, 2401, step)
+tints = np.arange(100, 2401, step)
 # tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
 np.random.shuffle(tints)
 
-gravs = [316] # [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
+gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
 
 if cloudy == "cloudy":
@@ -76,7 +77,10 @@ if cloudy == "cloudy":
 else:
     fseds = [-1]
 
-semi_majors = [-1] # [-1, 0.5, 0.13, 0.04, 0.02]
+if irradiated == "irradiated":
+    semi_majors = [-1, 0.5, 0.13, 0.04, 0.02]
+else:
+    semi_majors = [-1]
 
 def fsed_str(fsed):
     if fsed == -1:
@@ -93,6 +97,21 @@ def semi_major_str(semi_major):
 def fname_from_params(grav, tint, semi_major, fsed):
     fname_stem = f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_{fsed_str(fsed)}"
     return os.path.join(picaso_path, "data", "unified", f"{fname_stem}.h5")
+
+def initial_guess(fname):
+    with h5py.File(fname_cloudless) as f:
+        temp_guess = np.array(f["temperature"])
+        cvz_locs = np.array(f["cvz_locs"])
+        if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
+            nstr_upper = cvz_locs[-2]
+        else:
+            nstr_upper = cvz_locs[1]
+        nstr_upper += 5
+        # In case clouds make the RCB sink a bit, we want to allow this much
+        # This is unmotivated and we may find it should go even deeper
+        # However, having observed that the RCB tends to track the cloud base, I think it's fine
+
+    return temp_guess, nstr_upper
 
 cp_grad = json.load(open(os.path.join(__refdata__,'climate_INPUTS','specific_heat_p_adiabat_grad.json')))
 
@@ -146,19 +165,20 @@ def run(grav, tint, semi_major, fsed):
 
         temp_guess = None
         nstr_upper = None
+        guess_bobcat = False
         if fsed > 0:
-            with h5py.File(fname_cloudless) as f:
-                temp_guess = np.array(f["temperature"])
-                cvz_locs = np.array(f["cvz_locs"])
-                if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
-                    nstr_upper = cvz_locs[-2]
-                else:
-                    nstr_upper = cvz_locs[1]
-                nstr_upper += 5
-                # In case clouds make the RCB sink a bit, we want to allow this much
-                # This is unmotivated and we may find it should go even deeper
-                # However, having observed that the RCB tends to track the cloud base, I think it's fine
+            temp_guess, nstr_upper = initial_guess(fname_cloudless)
+        elif semi_major > 0:
+            # irradiated cloudless
+            fname_unirradiated = fname_from_params(grav, tint, -1, -1)
+            if os.path.exists(fname_unirradated):
+                temp_guess, nstr_upper = initial_guess(fname_unirradiated)
+            else:
+                guess_bobcat = True
         else:
+            guess_bobcat = True
+        
+        if guess_bobcat:
             teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
             pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
             temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work
