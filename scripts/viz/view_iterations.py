@@ -1,4 +1,3 @@
-# %%
 import numpy as np
 import h5py
 import warnings
@@ -40,7 +39,6 @@ AdiabatBundle = AdiabatBundle(
     np.array(cp_grad['specific_heat']),
 )
 
-# %%
 grav, tint = 316, 1100
 semi_major, fsed = -1, -1
 semi_major_str_plotout = f"semimajor = {semi_major} au" if semi_major > 0 else "no star"
@@ -85,4 +83,4 @@ ani = FuncAnimation(fig, update, frames=range(len(all_profiles)), interval=50, r
 out_dir = os.path.join(picaso_path, 'figures', 'unified')
 out_mp4 = os.path.join(out_dir, f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_{fsed_str(fsed)}.mp4")
 ani.save(out_mp4, writer='ffmpeg', dpi=150)
-# %%
+print(f"Saved to {out_mp4}")

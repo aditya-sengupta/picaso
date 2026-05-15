@@ -64,11 +64,11 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = np.arange(100, 2401, step)
-tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
+tints = [1100] # np.arange(100, 2401, step)
+# tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
 np.random.shuffle(tints)
 
-gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
+gravs = [316] # [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
 
 if cloudy == "cloudy":
@@ -76,7 +76,7 @@ if cloudy == "cloudy":
 else:
     fseds = [-1]
 
-semi_majors = [-1, 0.5, 0.13, 0.04, 0.02]
+semi_majors = [-1] # [-1, 0.5, 0.13, 0.04, 0.02]
 
 def fsed_str(fsed):
     if fsed == -1:
@@ -125,7 +125,6 @@ def generate_tasks():
 
 def run(grav, tint, semi_major, fsed):
     try:
-        print(f"grav = {grav} m/s/s, interior temperature = {tint} K, semimajor axis = {semi_major:.2f} au, fsed = {fsed}")
         # if this is a cloudy run and the equivalent cloudless run doesn't exist, you gotta skip
         if fsed > 0:
             cloudmode = "fixed"
@@ -138,7 +137,6 @@ def run(grav, tint, semi_major, fsed):
         
         # now, if we're here, we are either at a cloudless run, or a cloudy run with a known cloudless start
         fname = fname_from_params(grav, tint, semi_major, fsed)
-        # I'll work out how I want to handle reruns later, for now we can skip existing files
         if os.path.exists(fname):
             if rerun == "rerun":
                 os.remove(fname)
@@ -161,20 +159,15 @@ def run(grav, tint, semi_major, fsed):
                 # This is unmotivated and we may find it should go even deeper
                 # However, having observed that the RCB tends to track the cloud base, I think it's fine
         else:
-            """teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
+            teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
             pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
-            temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work"""
+            temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work
             # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
             # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
             # 2026-05-14: there's still strange jumps, but 300K seems to have run well for every logg/semimajor, so I'm starting them all from there
-            tint_hottest = 300 # I'm asserting that there's 300K models available for every point
-            #for tint_initial in tints:
-            #    if tint_initial < tint and os.path.exists(fname_from_params(grav, tint_initial, semi_major, fsed)):
-            #        tint_hottest = tint_initial
-
-            with h5py.File(fname_from_params(grav, tint_hottest, semi_major, fsed)) as f:
-                temp_guess = np.array(f["temperature"])
-                nstr_upper = 89
+            # 2026-05-14 evening: ok wow I'm not even matching the tutorial docs any more so we're going back to Bobcat
+            # I think the move is: no-cloud no-star, then irradiated guessing off of those.
+            nstr_upper = 89
                 
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
@@ -205,7 +198,9 @@ def run(grav, tint, semi_major, fsed):
 
         if semi_major > 0:
             cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
-        rfacv = 0.5
+            rfacv = 0.5
+        else:
+            rfacv = 0.0
 
         cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
         if fsed > 0:
