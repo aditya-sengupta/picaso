@@ -14,6 +14,10 @@ pwd; hostname; date
 
 module load python
 module load openmpi
+export NUMBA_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export OMP_NUM_THREADS=1
 mpiexec --bind-to core --map-by core -n 480 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudless irradiated full no_rerun # Mukherjee+26 and Bobcat match
 # mpiexec -n 50 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudy full rerun # Diamondback match+irradiated
 # mpiexec -n 50 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudless partial rerun # full cloudless grid, finer but with less information
