@@ -104,10 +104,10 @@ for fsed in ["nc"]: # [1, 2, 3, 4, 8]
             if len(all_teffs[j]) > 1:
                 T10_table[j,:] = np.interp(teffs, all_teffs[j], all_t10s[j])
 
-        np.savez(f"data/t10_tables/atm_semimajor{semimajor:.2f}_{fsed_str}{tag}.npz", logGravity=log_gravs, logTeff=np.log10(teffs), logT10=np.log10(T10_table))
+        np.savez(f"data/t10_tables/atm_semimajor{semimajor:.2f}_{fsed_str}.npz", logGravity=log_gravs, logTeff=np.log10(teffs), logT10=np.log10(T10_table))
 
     axs[0,0].legend(fontsize='small')
-    figpath = os.path.join(picaso_path, f"figures/t10/t10_table{tag}_{fsed_str}.png")
+    figpath = os.path.join(picaso_path, f"figures/t10/t10_table_{fsed_str}.png")
     plt.savefig(figpath, dpi=600)
     print(figpath)
     plt.close(fig)

@@ -63,11 +63,11 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = [600] #np.arange(100, 2401, step)
+tints = np.arange(100, 2401, step)
 # tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
 np.random.shuffle(tints)
 
-gravs = [56]# [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
+gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
 
 if cloudy == "cloudy":
@@ -148,7 +148,7 @@ def run(grav, tint, semi_major, fsed):
         elif semi_major > 0:
             # irradiated cloudless
             fname_unirradiated = fname_from_params(grav, tint, -1, -1)
-            if os.path.exists(fname_unirradated):
+            if os.path.exists(fname_unirradiated):
                 temp_guess, nstr_upper = initial_guess(fname_unirradiated)
             else:
                 guess_bobcat = True
