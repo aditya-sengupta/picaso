@@ -97,7 +97,7 @@ def fname_from_params(grav, tint, semi_major, fsed):
     return os.path.join(picaso_path, "data", "unified", f"{fname_stem}.h5")
 
 def initial_guess(fname):
-    with h5py.File(fname_cloudless) as f:
+    with h5py.File(fname) as f:
         temp_guess = np.array(f["temperature"])
         cvz_locs = np.array(f["cvz_locs"])
         if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
