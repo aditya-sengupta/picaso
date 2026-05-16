@@ -73,10 +73,10 @@ for fsed in ["nc"]: # [1, 2, 3, 4, 8]
                                 count_available_overall += 1
                                 pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
                                 teffs_this.append(teff)
-                                #if "t10" in f.attrs:
-                                #    t10s.append(f.attrs["t10"])
-                                #else:
-                                t10s.append(t10(pressure, temperature))
+                                if "t10" in f.attrs:
+                                    t10s.append(f.attrs["t10"])
+                                else:
+                                    t10s.append(t10(pressure, temperature))
                     except Exception:
                         continue
 

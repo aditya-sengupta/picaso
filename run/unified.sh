@@ -14,7 +14,7 @@ pwd; hostname; date
 
 module load python
 module load openmpi
-mpiexec -n 480 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudless irradiated full no_rerun # Mukherjee+26 and Bobcat match
+mpiexec --bind-to core --map-by core -n 480 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudless irradiated full no_rerun # Mukherjee+26 and Bobcat match
 # mpiexec -n 50 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py coarse cloudy full rerun # Diamondback match+irradiated
 # mpiexec -n 50 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudless partial rerun # full cloudless grid, finer but with less information
 # mpiexec -n 50 /home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudy partial rerun # full cloudy grid, finer but with less information

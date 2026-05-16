@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import h5py
 import warnings
@@ -9,6 +10,9 @@ from picaso.grad import did_grad_cp
 import os
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+
+grav, tint, semi_major, fsed = sys.argv[1:5]
+grav, tint, semi_major, fsed = int(grav), int(tint), float(semi_major), int(fsed)
 
 picaso_path = os.path.dirname(picaso.__path__[0])
 __refdata__ = os.environ['picaso_refdata']
@@ -39,8 +43,6 @@ AdiabatBundle = AdiabatBundle(
     np.array(cp_grad['specific_heat']),
 )
 
-grav, tint = 56, 600
-semi_major, fsed = -1, -1
 semi_major_str_plotout = f"semimajor = {semi_major} au" if semi_major > 0 else "no star"
 fsed_str_plotout = f"fsed = {fsed}" if fsed > 0 else "no cloud"
 
