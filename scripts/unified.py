@@ -25,13 +25,11 @@ from datetime import datetime
 import h5py
 import gc
 from mpi4py import MPI
-from scipy.integrate import ode
-from picaso.grad import did_grad_cp
 from collections import namedtuple
-import json
 
 sys.path.append(".")
 from out_to_hdf5 import out_to_hdf5
+from calculate_t10 import t10, regrid_initial_guess
 
 parser = argparse.ArgumentParser()
 parser.add_argument('sweep')
@@ -65,11 +63,11 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = np.arange(100, 2401, step)
+tints = [600] #np.arange(100, 2401, step)
 # tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
 np.random.shuffle(tints)
 
-gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
+gravs = [56]# [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
 
 if cloudy == "cloudy":
@@ -112,27 +110,6 @@ def initial_guess(fname):
         # However, having observed that the RCB tends to track the cloud base, I think it's fine
 
     return temp_guess, nstr_upper
-
-cp_grad = json.load(open(os.path.join(__refdata__,'climate_INPUTS','specific_heat_p_adiabat_grad.json')))
-
-AdiabatBundle = namedtuple('AdiabatBundle', ['t_table', 'p_table', 'grad','cp'])
-AdiabatBundle = AdiabatBundle(
-    np.array(cp_grad['temperature']),
-    np.array(cp_grad['pressure']),
-    np.array(cp_grad['adiabat_grad']),
-    np.array(cp_grad['specific_heat'])
-)
-
-def _dTdp(p, t):
-    grad_x, _ = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)
-    return float(grad_x) * t / p
-
-def t10(p_col, t_col):
-    solver = ode(_dTdp).set_integrator('dopri5', rtol=1e-8, atol=1e-8, nsteps=5000)
-    idx = np.where(t_col < 5199)[0][-1]
-    solver.set_initial_value(t_col[idx], p_col[idx])
-    solver.integrate(10.0)
-    return float(solver.y[0])
 
 def generate_tasks():
     """Generate all task tuples without storing them all in memory."""
@@ -181,13 +158,13 @@ def run(grav, tint, semi_major, fsed):
         if guess_bobcat:
             teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
             pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
-            temp_guess = np.interp(pressure_grid, pressure_bobcat, temp_bobcat) # closest Bobcat, resampled on the pressure grid we're using in this work
+            temp_guess = regrid_initial_guess(pressure_bobcat, temp_bobcat, pressure_grid) # closest Bobcat, resampled on the pressure grid we're using in this work
             # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
             # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
             # 2026-05-14: there's still strange jumps, but 300K seems to have run well for every logg/semimajor, so I'm starting them all from there
             # 2026-05-14 evening: ok wow I'm not even matching the tutorial docs any more so we're going back to Bobcat
             # I think the move is: no-cloud no-star, then irradiated guessing off of those.
-            nstr_upper = 89
+            nstr_upper = min(89, np.min(np.where(pressure_grid > np.max(pressure_bobcat))[0]))
                 
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this

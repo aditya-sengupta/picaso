@@ -62,14 +62,14 @@ sonora_profile_db = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bob
 gases_fly = ['CO','CH4','H2O','NH3','CO2','N2','HCN','H2','He','PH3','C2H2','Na','K','TiO','VO','FeH']
 
 #change opacity connection
-opacity_ck = jdi.opannection(method='resortrebin',preload_gases=gases_fly) # grab your opacities
+opacity_ck = jdi.opannection(ck_db=os.path.join(os.getenv('picaso_refdata'), "climate_INPUTS", "661"), method='resortrebin',preload_gases=gases_fly) # grab your opacities
 
 
 # %%
 cl_run = jdi.inputs(calculation="browndwarf", climate = True) # start a calculation
 
 
-tint= 700
+tint= 1100
 grav = 316 # Gravity of your Planet in m/s/s
 
 cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity

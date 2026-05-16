@@ -30,8 +30,6 @@ AdiabatBundle = AdiabatBundle(
 
 bobcat_path = os.path.join(os.getenv('picaso_refdata'),'sonora_grids','bobcat')
 
-tag = "_withinversion" # or ""
-
 def _dTdp(p, t):
     grad_x, _ = did_grad_cp(np.asarray(t).item(), np.asarray(p).item(), AdiabatBundle)
     return float(grad_x) * t / p
@@ -44,7 +42,7 @@ def t10(p_col, t_col):
     return float(solver.y[0])
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in ["nc", 1, 2, 3, 4, 8]:
+for fsed in ["nc"]: # [1, 2, 3, 4, 8]
     fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(4, 3, figsize=(8, 10))
     #log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
@@ -75,10 +73,10 @@ for fsed in ["nc", 1, 2, 3, 4, 8]:
                                 count_available_overall += 1
                                 pressure, temperature = np.array(f["pressure"]), np.array(f["temperature"])
                                 teffs_this.append(teff)
-                                if "t10" in f.attrs:
-                                    t10s.append(f.attrs["t10"])
-                                else:
-                                    t10s.append(t10(pressure, temperature))
+                                #if "t10" in f.attrs:
+                                #    t10s.append(f.attrs["t10"])
+                                #else:
+                                t10s.append(t10(pressure, temperature))
                     except Exception:
                         continue
 
