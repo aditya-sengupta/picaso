@@ -10,6 +10,16 @@ import sys
 import argparse
 import warnings
 warnings.filterwarnings('ignore')
+
+# ========== CRITICAL MPI+NUMBA+HDF5 FIXES ==========
+# Must set before importing any numba or h5py-dependent modules
+os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable Numba JIT in MPI context to avoid heap corruption
+os.environ['NUMBA_CACHE_DIR'] = ''    # Disable Numba caching
+os.environ['OMP_NUM_THREADS'] = '1'   # Force single-threaded OpenMP
+os.environ['MKL_NUM_THREADS'] = '1'   # Force single-threaded MKL
+os.environ['OPENBLAS_NUM_THREADS'] = '1'  # Force single-threaded OpenBLAS
+# ===================================================
+
 import picaso
 import picaso.justdoit as jdi
 import picaso.justplotit as jpi
@@ -231,14 +241,29 @@ def run(grav, tint, semi_major, fsed):
         
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
         
-        # Clean up local variables
+        # Clean up local variables - CRITICAL for MPI+Numba memory safety
         del cl_run, opacity_ck, out, temp_guess
+        if 'virga_out' in locals():
+            del virga_out
+        if 'virga_planet' in locals():
+            del virga_planet
+        if 'temp_guess_init' in locals():
+            del temp_guess_init
+        if 'temp_bobcat' in locals():
+            del temp_bobcat
+        if 'pressure_bobcat' in locals():
+            del pressure_bobcat
+        
+        # Multiple garbage collections to ensure Numba dealloc happens safely
+        gc.collect()
         gc.collect()
         
         return True
         
     except Exception as e:
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
+        # Aggressive cleanup on error
+        gc.collect()
         gc.collect()
         return False
 
@@ -274,8 +299,13 @@ def run_through_loop(num_threads=10):
             else:
                 local_failed += 1
             
-            # Force garbage collection after each completed task
+            # MPI barrier + aggressive garbage collection after each task
+            comm.Barrier()
             gc.collect()
+            gc.collect()
+    
+    # Final barrier before gathering results
+    comm.Barrier()
     
     # Gather results from all processes
     completed = comm.allreduce(local_completed, op=MPI.SUM)
