@@ -11,14 +11,8 @@ import argparse
 import warnings
 warnings.filterwarnings('ignore')
 
-# ========== CRITICAL MPI+NUMBA+HDF5 FIXES ==========
-# Must set before importing any numba or h5py-dependent modules
-os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable Numba JIT in MPI context to avoid heap corruption
-os.environ['NUMBA_CACHE_DIR'] = ''    # Disable Numba caching
-os.environ['OMP_NUM_THREADS'] = '1'   # Force single-threaded OpenMP
-os.environ['MKL_NUM_THREADS'] = '1'   # Force single-threaded MKL
-os.environ['OPENBLAS_NUM_THREADS'] = '1'  # Force single-threaded OpenBLAS
-# ===================================================
+os.environ['NUMBA_CACHE_DIR'] = ''
+
 
 import picaso
 import picaso.justdoit as jdi
