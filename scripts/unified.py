@@ -12,8 +12,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-os.environ["NUMBA_CACHE_DIR"] = ""
-
 import gc
 from collections import namedtuple
 from copy import deepcopy
