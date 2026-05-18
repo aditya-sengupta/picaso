@@ -5,71 +5,62 @@
 # unirradiated and irradiated
 # better handling of when runs have already been done
 
-import argparse
 import os
 import sys
+import argparse
 import warnings
+warnings.filterwarnings('ignore')
 
-warnings.filterwarnings("ignore")
-
-import gc
-from collections import namedtuple
-from copy import deepcopy
-from datetime import datetime
-
-import astropy.constants as c
-import astropy.units as u
-import h5py
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import virga
-import virga.justdoit as vj
-from mpi4py import MPI
+# os.environ['NUMBA_CACHE_DIR'] = ''
 
 import picaso
 import picaso.justdoit as jdi
 import picaso.justplotit as jpi
+import virga
+import virga.justdoit as vj
+import astropy.units as u
+import astropy.constants as c
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from copy import deepcopy
+from datetime import datetime
+import h5py
+import gc
+from mpi4py import MPI
+from collections import namedtuple
 
 sys.path.append(".")
-from calculate_t10 import regrid_initial_guess, t10
 from out_to_hdf5 import out_to_hdf5
+from calculate_t10 import t10, regrid_initial_guess
 
 parser = argparse.ArgumentParser()
-parser.add_argument("sweep")
-parser.add_argument("cloudy")
-parser.add_argument("irradiated")
-parser.add_argument("save")
-parser.add_argument("rerun")
+parser.add_argument('sweep')
+parser.add_argument('cloudy')
+parser.add_argument('irradiated')
+parser.add_argument('save')
+parser.add_argument('rerun')
 args = parser.parse_args()
-sweep, cloudy, irradiated, save, rerun = (
-    str(args.sweep),
-    str(args.cloudy),
-    str(args.irradiated),
-    str(args.save),
-    str(args.rerun),
-)
+sweep, cloudy, irradiated, save, rerun = str(args.sweep), str(args.cloudy), str(args.irradiated), str(args.save), str(args.rerun)
 
-print(
-    f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = }"
-)
+print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = }")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
-virga_path = os.getenv("virga")
+virga_path = os.getenv('virga')
 
 picaso_path = os.path.dirname(picaso.__path__[0])
-__refdata__ = os.getenv("picaso_refdata")
+__refdata__ = os.getenv('picaso_refdata')
 
-mh = "0.0"
-CtoO = "0.46"
+mh = '0.0'
+CtoO = '0.46'
 nlevel = 91
 pressure_grid = np.logspace(-4, 3 + np.log10(3), nlevel)
-ck_stem = f"sonora_2121grid_feh{mh}_co{CtoO}"
+ck_stem = f'sonora_2121grid_feh{mh}_co{CtoO}'
 ck_stem += ".hdf5"
-ck_db = os.path.join(__refdata__, "opacities", "preweighted", ck_stem)
+ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 
-sonora_profile_db = os.path.join(__refdata__, "sonora_grids", "bobcat")
-bobcat_temps = np.arange(200, 2401, 100)  # it's not quite this, but this'll do fine
+sonora_profile_db = os.path.join(__refdata__,'sonora_grids','bobcat')
+bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
 # effective^4 = equilibrium^4 + intrinsic^4
@@ -92,13 +83,11 @@ if irradiated == "irradiated":
 else:
     semi_majors = [-1]
 
-
 def fsed_str(fsed):
     if fsed == -1:
         return "nc"
     else:
         return "f" + str(fsed)
-
 
 def semi_major_str(semi_major):
     if semi_major == -1:
@@ -106,23 +95,15 @@ def semi_major_str(semi_major):
     else:
         return f"semimajor{semi_major:.2f}"
 
-
 def fname_from_params(grav, tint, semi_major, fsed):
-    fname_stem = (
-        f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_{fsed_str(fsed)}"
-    )
+    fname_stem = f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_{fsed_str(fsed)}"
     return os.path.join(picaso_path, "data", "unified", f"{fname_stem}.h5")
-
 
 def initial_guess(fname):
     with h5py.File(fname) as f:
         temp_guess = np.array(f["temperature"])
         cvz_locs = np.array(f["cvz_locs"])
-        if (
-            cvz_locs[-2] > 0
-            and temp_guess[cvz_locs[-2]] < 5199.9
-            and cvz_locs[5] > cvz_locs[2]
-        ):
+        if cvz_locs[-2] > 0 and temp_guess[cvz_locs[-2]] < 5199.9 and cvz_locs[5] > cvz_locs[2]:
             nstr_upper = cvz_locs[-2]
         else:
             nstr_upper = cvz_locs[1]
@@ -133,7 +114,6 @@ def initial_guess(fname):
 
     return temp_guess, nstr_upper
 
-
 def generate_tasks():
     """Generate all task tuples without storing them all in memory."""
     for grav in gravs:
@@ -142,7 +122,6 @@ def generate_tasks():
                 for fsed in fseds:
                     yield (grav, tint, semi_major, fsed)
 
-
 def run(grav, tint, semi_major, fsed):
     try:
         # if this is a cloudy run and the equivalent cloudless run doesn't exist, you gotta skip
@@ -150,22 +129,18 @@ def run(grav, tint, semi_major, fsed):
             cloudmode = "fixed"
             fname_cloudless = fname_from_params(grav, tint, semi_major, -1)
             if not os.path.exists(fname_cloudless):
-                print(
-                    f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - cloudless model unavailable"
-                )
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - cloudless model unavailable")
                 return False
         else:
             cloudmode = "cloudless"
-
+        
         # now, if we're here, we are either at a cloudless run, or a cloudy run with a known cloudless start
         fname = fname_from_params(grav, tint, semi_major, fsed)
         if os.path.exists(fname):
             if rerun == "rerun":
                 os.remove(fname)
             else:
-                print(
-                    f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - already complete"
-                )
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - already complete")
                 return True
 
         temp_guess = None
@@ -182,49 +157,28 @@ def run(grav, tint, semi_major, fsed):
                 guess_bobcat = True
         else:
             guess_bobcat = True
-
+        
         if guess_bobcat:
-            teff_bobcat, grav_bobcat = (
-                bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))],
-                bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))],
-            )
-            pressure_bobcat, temp_bobcat = np.loadtxt(
-                os.path.join(
-                    sonora_profile_db, f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"
-                ),
-                usecols=[1, 2],
-                unpack=True,
-                skiprows=1,
-            )
-            temp_guess = regrid_initial_guess(
-                pressure_bobcat, temp_bobcat, pressure_grid
-            )  # closest Bobcat, resampled on the pressure grid we're using in this work
+            teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
+            pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
+            temp_guess = regrid_initial_guess(pressure_bobcat, temp_bobcat, pressure_grid) # closest Bobcat, resampled on the pressure grid we're using in this work
             # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
             # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
             # 2026-05-14: there's still strange jumps, but 300K seems to have run well for every logg/semimajor, so I'm starting them all from there
             # 2026-05-14 evening: ok wow I'm not even matching the tutorial docs any more so we're going back to Bobcat
             # I think the move is: no-cloud no-star, then irradiated guessing off of those.
-            nstr_upper = min(
-                89, np.min(np.where(pressure_grid > np.max(pressure_bobcat))[0])
-            )
-
+            nstr_upper = min(89, np.min(np.where(pressure_grid > np.max(pressure_bobcat))[0]))
+                
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
         # because it would've thrown an error when the file exists
         # if we happen to end up here, we simply won't do any of this
 
-        lower_temperature, upper_temperature = (
-            100 * (tint // 100),
-            100 * (tint // 100 + 1),
-        )
+        lower_temperature, upper_temperature = 100 * (tint // 100), 100 * (tint // 100 + 1)
         if lower_temperature != tint and upper_temperature != tint:
-            lower_neighbor = fname_from_params(
-                grav, 100 * (tint // 100), semi_major, fsed
-            )
-            upper_neighbor = fname_from_params(
-                grav, 100 * (tint // 100 + 1), semi_major, fsed
-            )
-
+            lower_neighbor = fname_from_params(grav, 100 * (tint // 100), semi_major, fsed)
+            upper_neighbor = fname_from_params(grav, 100 * (tint // 100 + 1), semi_major, fsed)
+            
             if os.path.exists(lower_neighbor) and os.path.exists(upper_neighbor):
                 with h5py.File(lower_neighbor) as f:
                     nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
@@ -233,94 +187,37 @@ def run(grav, tint, semi_major, fsed):
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
-        print(
-            f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}"
-        )
+        print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
 
         calc_type = "planet" if semi_major > 0 else "browndwarf"
-        cl_run = jdi.inputs(
-            calculation=calc_type, climate=True
-        )  # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
-        cl_run.gravity(gravity=grav, gravity_unit=u.Unit("m/(s**2)"))  # input gravity
-        cl_run.effective_temp(tint)  # input effective temperature
-        gases_fly = [
-            "CO",
-            "CH4",
-            "H2O",
-            "NH3",
-            "CO2",
-            "N2",
-            "HCN",
-            "H2",
-            "C2H2",
-            "C2H4",
-            "C2H6",
-            "Na",
-            "K",
-            "PH3",
-            "FeH",
-            "SO2",
-            "H2S",
-        ]
-        opacity_ck = jdi.opannection(
-            ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),
-            method="resortrebin",
-            preload_gases=gases_fly,
-        )
+        cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
+        cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
+        cl_run.effective_temp(tint) # input effective temperature
+        gases_fly = ['CO','CH4','H2O','NH3','CO2','N2','HCN','H2','C2H2','C2H4','C2H6','Na','K','PH3','FeH','SO2','H2S']
+        opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
 
         if semi_major > 0:
-            cl_run.star(
-                opacity_ck,
-                temp=5778.0,
-                metal=0.0,
-                logg=4.4,
-                radius=1.0,
-                database="phoenix",
-                radius_unit=u.R_sun,
-                semi_major=semi_major,
-                semi_major_unit=u.AU,
-            )
+            cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
             rfacv = 0.5
         else:
             rfacv = 0.0
 
-        cl_run.inputs_climate(
-            temp_guess=temp_guess,
-            pressure=pressure_grid,
-            rcb_guess=nstr_upper,
-            rfacv=rfacv,
-        )
+        cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
         if fsed > 0:
-            kz = np.ones_like(pressure_grid) * 1e10  # idk
+            kz = np.ones_like(pressure_grid) * 1e10 # idk
             virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
-            virga_planet.gravity(gravity=grav, gravity_unit=u.Unit("m/(s**2)"))
-            virga_planet.ptk(
-                df=pd.DataFrame(
-                    {"pressure": pressure_grid, "temperature": temp_guess, "kz": kz}
-                ),
-                kz_min=1e5,
-                latent_heat=True,
-            )
-            virga_out = vj.compute(
-                virga_planet,
-                as_dict=True,
-                directory=os.path.join(virga_path, "refrind"),
-            )
+            virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+            virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+            virga_out = vj.compute(virga_planet, as_dict=True, directory=os.path.join(virga_path, "refrind"))
             cl_run.fix_virga_clouds(virga_out)
 
-        cl_run.atmosphere(
-            mh=1, cto_relative=1, chem_method="visscher"
-        )  # on the fly mixing
-        out = cl_run.climate(
-            opacity_ck, save_all_profiles=True, with_spec=True, verbose=True
-        )
-
+        cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=True)
+        
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
             f.attrs["nstr_upper_init"] = nstr_upper_init
-            f.attrs["effective_temperature"] = out["spectrum_output"][
-                "effective_temperature"
-            ]
+            f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
             f.attrs["t10"] = t10(pressure_grid, out["temperature"])
             if save == "full":
                 out_to_hdf5(out, f)
@@ -330,37 +227,32 @@ def run(grav, tint, semi_major, fsed):
                 f["cvz_locs"] = out["cvz_locs"]
                 f["spectrum_output_thermal"] = out["spectrum_output"]["thermal"]
                 f["spectrum_output_wavenumber"] = out["spectrum_output"]["wavenumber"]
-
+                
                 if fsed > 0:
-                    for k in [
-                        "opd_per_layer",
-                        "asymmetry",
-                        "single_scattering",
-                        "condensate_mmr",
-                    ]:
+                    for k in ["opd_per_layer", "asymmetry", "single_scattering", "condensate_mmr"]:
                         f[k] = virga_out[k]
-
+        
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
-
+        
         # Clean up local variables - CRITICAL for MPI+Numba memory safety
         del cl_run, opacity_ck, out, temp_guess
-        if "virga_out" in locals():
+        if 'virga_out' in locals():
             del virga_out
-        if "virga_planet" in locals():
+        if 'virga_planet' in locals():
             del virga_planet
-        if "temp_guess_init" in locals():
+        if 'temp_guess_init' in locals():
             del temp_guess_init
-        if "temp_bobcat" in locals():
+        if 'temp_bobcat' in locals():
             del temp_bobcat
-        if "pressure_bobcat" in locals():
+        if 'pressure_bobcat' in locals():
             del pressure_bobcat
-
+        
         # Multiple garbage collections to ensure Numba dealloc happens safely
         gc.collect()
         gc.collect()
-
+        
         return True
-
+        
     except Exception as e:
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
         # Aggressive cleanup on error
@@ -368,13 +260,12 @@ def run(grav, tint, semi_major, fsed):
         gc.collect()
         return False
 
-
 def run_through_loop(num_threads=10):
     """Run all tasks using MPI, saving each result to disk before freeing memory."""
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-
+    
     # Master process distributes tasks
     if rank == 0:
         tasks = list(generate_tasks())
@@ -383,15 +274,15 @@ def run_through_loop(num_threads=10):
     else:
         tasks = None
         total_tasks = None
-
+    
     # Broadcast task list to all processes
     tasks = comm.bcast(tasks, root=0)
     total_tasks = comm.bcast(total_tasks, root=0)
-
+    
     # Distribute tasks evenly across processes
     local_completed = 0
     local_failed = 0
-
+    
     for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
         # Only process tasks assigned to this rank
         if i % size == rank:
@@ -400,24 +291,23 @@ def run_through_loop(num_threads=10):
                 local_completed += 1
             else:
                 local_failed += 1
-
+            
             # MPI barrier + aggressive garbage collection after each task
             comm.Barrier()
             gc.collect()
             gc.collect()
-
+    
     # Final barrier before gathering results
     comm.Barrier()
-
+    
     # Gather results from all processes
     completed = comm.allreduce(local_completed, op=MPI.SUM)
     failed = comm.allreduce(local_failed, op=MPI.SUM)
-
+    
     if rank == 0:
-        print("\n=== Summary ===")
+        print(f"\n=== Summary ===")
         print(f"Total Completed: {completed}")
         print(f"Total Failed: {failed}")
-
-
+    
 if __name__ == "__main__":
     run_through_loop()  # Run with: mpirun -np N python script.py
