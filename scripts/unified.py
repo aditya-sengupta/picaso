@@ -292,13 +292,7 @@ def run_through_loop(num_threads=10):
             else:
                 local_failed += 1
             
-            # MPI barrier + aggressive garbage collection after each task
-            comm.Barrier()
             gc.collect()
-            gc.collect()
-    
-    # Final barrier before gathering results
-    comm.Barrier()
     
     # Gather results from all processes
     completed = comm.allreduce(local_completed, op=MPI.SUM)
