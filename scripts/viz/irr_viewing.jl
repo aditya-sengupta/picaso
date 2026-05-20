@@ -38,7 +38,7 @@ begin
 end;
 
 # ╔═╡ 2ef0b5fc-078e-4f45-864d-30f5602e6d1f
-@bind teff Slider(100:50:600)
+@bind teff Slider(100:10:300)
 
 # ╔═╡ 8d8e1879-1dc6-4058-8599-fdf7e601f09f
 @bind logg Slider(3.0:0.25:5.5)
@@ -85,6 +85,26 @@ begin
 	end
 	# (fstr == "nc" ? "a = $semimajor au" : nothing)
 	p
+end
+
+# ╔═╡ f9cd0568-20e7-4ee7-a33a-0fb198faca19
+begin
+	semimajor = "0.02"
+	semimajor_str = semimajor == "inf" ? "ns" : "semimajor$(semimajor)"
+	p2 = plot(legend=:topright, title="grav=$g m/s², semimajor = $semimajor", yflip=true, yscale=:log10, xlims=(0, 5199))
+	teffs = 100:20:300
+	for (j, teff) in enumerate(teffs)
+		for (i, fstr) in enumerate(["nc"])
+			fname = "/Users/adityasengupta/picaso/data/unified/unified_tint$(teff)_grav$(g)_$(semimajor_str)_$(fstr).h5"
+			if isfile(fname)
+				f = h5open(fname);
+				plot!(Array(f["temperature"]), Array(f["pressure"]), yflip=true, yscale=:log10, ylims=(1e-4, 3e3), label="tint = " * string(teff) * " K, nstr_upper = " * string(attrs(f)["nstr_upper_init"]), xlims=(0, 5199), color=(cgrad(:berlin10)[j/length(teffs)]), alpha=(1-i/7))
+				t10 = read_attribute(h5open(fname), "t10")
+				scatter!([t10], [10.0],  color=(cgrad(:berlin10)[j/length(teffs)]), alpha=(1-i/7), label=nothing, msw=0)
+			end
+		end
+	end
+	p2
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1599,5 +1619,6 @@ version = "1.13.0+0"
 # ╠═8d8e1879-1dc6-4058-8599-fdf7e601f09f
 # ╟─f95919bf-cb39-4b44-84c5-6f49626f8340
 # ╟─071a4fd4-ad9a-41b1-86bd-997c6074275c
+# ╠═f9cd0568-20e7-4ee7-a33a-0fb198faca19
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
