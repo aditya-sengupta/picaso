@@ -206,7 +206,6 @@ def run(grav, tint, semi_major, fsed):
                 if upper_temperature > 2400:
                     upper_temperature = None
 
-            print(f"Interpolating using {lower_temperature = }, {upper_temperature = }")
             if lower_temperature is not None:
                 with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
                     t10_lower = f.attrs["t10"]
@@ -222,13 +221,16 @@ def run(grav, tint, semi_major, fsed):
             if above_lower and below_upper:
                 print(f"[{grav}, {tint}, {semi_major}, {fsed}] not an outlier, skipping.")
                 return True
-            else:
+            elif (not above_lower) and (not below_upper):
                 # weighted average
-                print(f"[{grav}, {tint}, {semi_major}, {fsed}] outlier, rerunning.")
                 w_down, w_up = tint - lower_temperature, upper_temperature - tint
                 w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
                 temp_guess = temp_lower * w_up + temp_upper * w_down
-                nstr_upper = 89
+            elif not above_lower:
+                temp_guess = temp_lower
+            elif not below_upper:
+                temp_guess = temp_upper
+            nstr_upper = 89
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
