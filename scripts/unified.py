@@ -43,7 +43,7 @@ parser.add_argument('rerun')
 args = parser.parse_args()
 sweep, cloudy, irradiated, save, rerun = str(args.sweep), str(args.cloudy), str(args.irradiated), str(args.save), str(args.rerun)
 
-print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = }")
+print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
@@ -190,26 +190,41 @@ def run(grav, tint, semi_major, fsed):
         if rerun == "outlier" and os.path.exists(fname):
             step = 100 if sweep == "coarse" else 10
             temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
+            above_lower, below_upper = True, True
             with h5py.File(fname) as f:
                 t10_current = f.attrs["t10"]
 
             lower_temperature, upper_temperature = tint - step, tint + step
-            while not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
+            while lower_temperature is not None and not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
                 lower_temperature -= step
-            while not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
+                if lower_temperature < 100:
+                    # we're off-grid
+                    lower_temperature = None
+                    
+            while upper_temperature is not None and not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
                 upper_temperature += step
+                if upper_temperature > 2400:
+                    upper_temperature = None
 
-            with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
-                t10_lower = f.attrs["t10"]
-                temp_lower = f["temperature"]
-            with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
-                t10_upper = f.attrs["t10"]
-                temp_upper = f["temperature"]
-            if t10_current < t10_upper and t10_current > t10_lower:
+            print(f"Interpolating using {lower_temperature = }, {upper_temperature = }")
+            if lower_temperature is not None:
+                with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
+                    t10_lower = f.attrs["t10"]
+                    temp_lower = np.array(f["temperature"])
+                    above_lower = t10_current > t10_lower
+
+            if upper_temperature is not None:
+                with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
+                    t10_upper = f.attrs["t10"]
+                    temp_upper = np.array(f["temperature"])
+                    below_upper = t10_current < t10_upper
+            
+            if above_lower and below_upper:
                 print("f[{grav}, {tint}, {semi_major}, {fsed}] not an outlier, skipping.")
                 return True
             else:
                 # weighted average
+                print("f[{grav}, {tint}, {semi_major}, {fsed}] outlier, rerunning.")
                 w_down, w_up = tint - lower_temperature, upper_temperature - tint
                 w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
                 temp_guess = temp_lower * w_up + temp_upper * w_down
@@ -264,7 +279,6 @@ def run(grav, tint, semi_major, fsed):
         
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
         
-        # Clean up local variables - CRITICAL for MPI+Numba memory safety
         del cl_run, opacity_ck, out, temp_guess
         if 'virga_out' in locals():
             del virga_out
@@ -277,26 +291,22 @@ def run(grav, tint, semi_major, fsed):
         if 'pressure_bobcat' in locals():
             del pressure_bobcat
         
-        # Multiple garbage collections to ensure Numba dealloc happens safely
-        gc.collect()
         gc.collect()
         
         return True
         
     except Exception as e:
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
-        # Aggressive cleanup on error
-        gc.collect()
         gc.collect()
         return False
 
-def run_through_loop(num_threads=10):
-    """Run all tasks using MPI, saving each result to disk before freeing memory."""
+parallel = True # just for debugging
+
+if parallel:
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    
-    # Master process distributes tasks
+
     if rank == 0:
         tasks = list(generate_tasks())
         total_tasks = len(tasks)
@@ -304,17 +314,14 @@ def run_through_loop(num_threads=10):
     else:
         tasks = None
         total_tasks = None
-    
-    # Broadcast task list to all processes
+
     tasks = comm.bcast(tasks, root=0)
     total_tasks = comm.bcast(total_tasks, root=0)
-    
-    # Distribute tasks evenly across processes
+
     local_completed = 0
     local_failed = 0
-    
+
     for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
-        # Only process tasks assigned to this rank
         if i % size == rank:
             result = run(grav, tint, semi_major, fsed)
             if result:
@@ -323,15 +330,24 @@ def run_through_loop(num_threads=10):
                 local_failed += 1
             
             gc.collect()
-    
-    # Gather results from all processes
+
     completed = comm.allreduce(local_completed, op=MPI.SUM)
     failed = comm.allreduce(local_failed, op=MPI.SUM)
-    
+
     if rank == 0:
         print(f"\n=== Summary ===")
         print(f"Total Completed: {completed}")
         print(f"Total Failed: {failed}")
-    
-if __name__ == "__main__":
-    run_through_loop()  # Run with: mpirun -np N python script.py
+else:
+    tasks = generate_tasks()
+    completed, failed = 0, 0
+    for task in tasks:
+        result = run(*task)
+        if result:
+            completed += 1
+        else:
+            failed += 1
+
+    print(f"\n=== Summary ===")
+    print(f"Total Completed: {completed}")
+    print(f"Total Failed: {failed}")
