@@ -66,7 +66,7 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
-tints = np.arange(100, 501, step)
+tints = np.arange(100, 2401, step)
 # tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
 np.random.shuffle(tints)
 
@@ -220,11 +220,11 @@ def run(grav, tint, semi_major, fsed):
                     below_upper = t10_current < t10_upper
             
             if above_lower and below_upper:
-                print("f[{grav}, {tint}, {semi_major}, {fsed}] not an outlier, skipping.")
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] not an outlier, skipping.")
                 return True
             else:
                 # weighted average
-                print("f[{grav}, {tint}, {semi_major}, {fsed}] outlier, rerunning.")
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] outlier, rerunning.")
                 w_down, w_up = tint - lower_temperature, upper_temperature - tint
                 w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
                 temp_guess = temp_lower * w_up + temp_upper * w_down
