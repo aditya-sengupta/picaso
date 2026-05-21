@@ -20,7 +20,7 @@ for fsed in ["nc"]:  # [1, 2, 3, 4, 8]
     log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
     gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
     semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
-    teffs = np.arange(100, 2401, 10)
+    teffs = np.arange(100, 2401, 100)
     cmap = cm.magma(np.linspace(0, 1, len(semimajors) + 1))[:-1]
 
     for semimajor, c in zip(semimajors, cmap):

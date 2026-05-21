@@ -139,7 +139,7 @@ def run(grav, tint, semi_major, fsed):
         if os.path.exists(fname):
             if rerun == "rerun":
                 os.remove(fname)
-            else:
+            elif rerun == "no_rerun":
                 print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - already complete")
                 return True
 
@@ -186,6 +186,35 @@ def run(grav, tint, semi_major, fsed):
                 with h5py.File(upper_neighbor) as f:
                     nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
 
+        # next bit of logic, 'outlier' reruns.
+        if rerun == "outlier" and os.path.exists(fname):
+            step = 100 if sweep == "coarse" else 10
+            temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
+            with h5py.File(fname) as f:
+                t10_current = f.attrs["t10"]
+
+            lower_temperature, upper_temperature = tint - step, tint + step
+            while not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
+                lower_temperature -= step
+            while not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
+                upper_temperature += step
+
+            with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
+                t10_lower = f.attrs["t10"]
+                temp_lower = f["temperature"]
+            with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
+                t10_upper = f.attrs["t10"]
+                temp_upper = f["temperature"]
+            if t10_current < t10_upper and t10_current > t10_lower:
+                print("f[{grav}, {tint}, {semi_major}, {fsed}] not an outlier, skipping.")
+                return True
+            else:
+                # weighted average
+                w_down, w_up = tint - lower_temperature, upper_temperature - tint
+                w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
+                temp_guess = temp_lower * w_up + temp_upper * w_down
+                nstr_upper = 89
+
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
@@ -213,7 +242,7 @@ def run(grav, tint, semi_major, fsed):
             cl_run.fix_virga_clouds(virga_out)
 
         cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=True)
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
