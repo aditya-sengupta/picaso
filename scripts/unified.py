@@ -10,8 +10,7 @@ import sys
 import argparse
 import warnings
 warnings.filterwarnings('ignore')
-
-# os.environ['NUMBA_CACHE_DIR'] = ''
+import traceback
 
 import picaso
 import picaso.justdoit as jdi
@@ -299,6 +298,7 @@ def run(grav, tint, semi_major, fsed):
         
     except Exception as e:
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
+        print(traceback.format_exc())
         gc.collect()
         return False
 
