@@ -167,7 +167,11 @@ def run(grav, tint, semi_major, fsed):
             # 2026-05-14: there's still strange jumps, but 300K seems to have run well for every logg/semimajor, so I'm starting them all from there
             # 2026-05-14 evening: ok wow I'm not even matching the tutorial docs any more so we're going back to Bobcat
             # I think the move is: no-cloud no-star, then irradiated guessing off of those.
-            nstr_upper = min(89, np.min(np.where(pressure_grid > np.max(pressure_bobcat))[0]))
+            indices_below_bobcat = np.where(pressure_grid > np.max(pressure_bobcat))[0]
+            if len(indices_below_bobcat) > 1:
+                nstr_upper = min(89, np.min(indices_below_bobcat))
+            else:
+                nstr_upper = 89
                 
         # we're going to look for neighbors on the coarse grid
         # if this point itself is on the coarse grid, we shouldn't be able to hit this
