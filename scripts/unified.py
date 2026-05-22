@@ -58,7 +58,7 @@ ck_stem = f'sonora_2121grid_feh{mh}_co{CtoO}'
 ck_stem += ".hdf5"
 ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 
-sonora_profile_db = os.path.join(__refdata__,'sonora_grids','bobcat')
+sonora_profile_db = os.path.join(__refdata__,'sonora_grids', 'bobcat', "structures_m+0.0")
 bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
@@ -160,7 +160,7 @@ def run(grav, tint, semi_major, fsed):
         
         if guess_bobcat:
             teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
-            pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.cmp.gz"), usecols=[1,2],unpack=True, skiprows = 1)
+            pressure_bobcat, temp_bobcat = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.dat"), usecols=[1,2],unpack=True, skiprows = 1)
             temp_guess = regrid_initial_guess(pressure_bobcat, temp_bobcat, pressure_grid) # closest Bobcat, resampled on the pressure grid we're using in this work
             # 2026-05-11: temporarily, we're just starting at our equivalent 800 run
             # 2026-05-13: this worked to generate the 100K/200K grid locally, so now we're starting at the hottest run available that's colder than the current one
