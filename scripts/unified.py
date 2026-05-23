@@ -119,50 +119,54 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     If it is, provide an initial temperature guess with which to do a rerun.
     If it's not, return None.
     """
-    fname = fname_from_params(grav, tint, semi_major, fsed)
-    step = 100 if sweep == "coarse" else 10
-    temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
-    above_lower, below_upper = True, True
-    with h5py.File(fname) as f:
-        t10_current = f.attrs["t10"]
+    try:
+        fname = fname_from_params(grav, tint, semi_major, fsed)
+        step = 100 if sweep == "coarse" else 10
+        temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
+        above_lower, below_upper = True, True
+        with h5py.File(fname) as f:
+            t10_current = f.attrs["t10"]
 
-    lower_temperature, upper_temperature = tint - step, tint + step
-    while lower_temperature is not None and not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
-        lower_temperature -= step
-        if lower_temperature < 100:
-            # we're off-grid
-            lower_temperature = None
-            
-    while upper_temperature is not None and not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
-        upper_temperature += step
-        if upper_temperature > 2400:
-            upper_temperature = None
+        lower_temperature, upper_temperature = tint - step, tint + step
+        while lower_temperature is not None and not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
+            lower_temperature -= step
+            if lower_temperature < 100:
+                # we're off-grid
+                lower_temperature = None
+                
+        while upper_temperature is not None and not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
+            upper_temperature += step
+            if upper_temperature > 2400:
+                upper_temperature = None
 
-    if lower_temperature is not None:
-        with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
-            t10_lower = f.attrs["t10"]
-            temp_lower = np.array(f["temperature"])
-            above_lower = t10_current > t10_lower
+        if lower_temperature is not None:
+            with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
+                t10_lower = f.attrs["t10"]
+                temp_lower = np.array(f["temperature"])
+                above_lower = t10_current > t10_lower
 
-    if upper_temperature is not None:
-        with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
-            t10_upper = f.attrs["t10"]
-            temp_upper = np.array(f["temperature"])
-            below_upper = t10_current < t10_upper
-    
-    if above_lower and below_upper:
+        if upper_temperature is not None:
+            with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
+                t10_upper = f.attrs["t10"]
+                temp_upper = np.array(f["temperature"])
+                below_upper = t10_current < t10_upper
+        
+        if above_lower and below_upper:
+            return None
+        elif (not above_lower) and (not below_upper):
+            # weighted average
+            w_down, w_up = tint - lower_temperature, upper_temperature - tint
+            w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
+            temp_guess = temp_lower * w_up + temp_upper * w_down
+        elif not above_lower:
+            temp_guess = temp_lower
+        elif not below_upper:
+            temp_guess = temp_upper
+        
+        return temp_guess
+    except Exception as e:
+        print(f"Error in is_outlier_guess for [{grav}, {tint}, {semi_major}, {fsed}]: {e}")
         return None
-    elif (not above_lower) and (not below_upper):
-        # weighted average
-        w_down, w_up = tint - lower_temperature, upper_temperature - tint
-        w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
-        temp_guess = temp_lower * w_up + temp_upper * w_down
-    elif not above_lower:
-        temp_guess = temp_lower
-    elif not below_upper:
-        temp_guess = temp_upper
-    
-    return temp_guess
 
 def count_outliers():
     outlier_count = 0
@@ -175,12 +179,10 @@ def count_outliers():
 
     return outlier_count
 
-print(f"{count_outliers() = }")
-
 def generate_tasks():
     k = 0
-    condition = lambda k: count_outliers() > 0 if rerun == "outlier" else k == 0
-    while condition(k):
+    outliers_found = True  # Start with True to enter loop on first iteration
+    while outliers_found if rerun == "outlier" else k == 0:
         for grav in gravs:
             for tint in tints:
                 for semi_major in semi_majors:
@@ -188,6 +190,11 @@ def generate_tasks():
                         if rerun != "outlier" or (os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and is_outlier_guess(grav, tint, semi_major, fsed) is not None):
                             yield (grav, tint, semi_major, fsed)
 
+        # Only recheck outliers if on outlier mode and we're about to loop again
+        if rerun == "outlier" and k == 0:
+            outliers_found = count_outliers() > 0
+        else:
+            outliers_found = False
         k += 1
 
 def run(grav, tint, semi_major, fsed):
@@ -328,15 +335,12 @@ def run(grav, tint, semi_major, fsed):
             del temp_bobcat
         if 'pressure_bobcat' in locals():
             del pressure_bobcat
-        
-        gc.collect()
-        
+                
         return True
         
     except Exception as e:
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
         print(traceback.format_exc())
-        gc.collect()
         return False
 
 parallel = True # just for debugging
@@ -347,28 +351,39 @@ if parallel:
     size = comm.Get_size()
 
     if rank == 0:
-        tasks = list(generate_tasks())
-        total_tasks = len(tasks)
-        print(f"Total tasks to process: {total_tasks}")
+        try:
+            all_tasks = list(generate_tasks())
+            total_tasks = len(all_tasks)
+            print(f"Total tasks to process: {total_tasks}")
+            # Distribute tasks evenly across ranks
+            distributed_tasks = [[] for _ in range(size)]
+            for i, task in enumerate(all_tasks):
+                distributed_tasks[i % size].append(task)
+        except Exception as e:
+            print(f"Error generating tasks: {e}")
+            print(traceback.format_exc())
+            distributed_tasks = None
     else:
-        tasks = None
+        distributed_tasks = None
         total_tasks = None
 
-    tasks = comm.bcast(tasks, root=0)
-    total_tasks = comm.bcast(total_tasks, root=0)
+    local_tasks = comm.scatter(distributed_tasks, root=0)
 
     local_completed = 0
     local_failed = 0
 
-    for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
-        if i % size == rank:
+    if local_tasks is not None:
+        for grav, tint, semi_major, fsed in local_tasks:
+            print("starting to run")
             result = run(grav, tint, semi_major, fsed)
             if result:
                 local_completed += 1
             else:
                 local_failed += 1
-            
             gc.collect()
+    else:
+        if rank == 0:
+            print("Error: local_tasks is None - task generation failed")
 
     completed = comm.allreduce(local_completed, op=MPI.SUM)
     failed = comm.allreduce(local_failed, op=MPI.SUM)
