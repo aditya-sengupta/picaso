@@ -119,6 +119,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     If it is, provide an initial temperature guess with which to do a rerun.
     If it's not, return None.
     """
+    fname = fname_from_params(grav, tint, semi_major, fsed)
     step = 100 if sweep == "coarse" else 10
     temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
     above_lower, below_upper = True, True
@@ -168,7 +169,7 @@ def generate_tasks():
         for tint in tints:
             for semi_major in semi_majors:
                 for fsed in fseds:
-                    if rerun != "outlier" or is_outlier_guess(grav, tint, semi_major, fsed):
+                    if rerun != "outlier" or (os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and is_outlier_guess(grav, tint, semi_major, fsed) is not None):
                         yield (grav, tint, semi_major, fsed)
 
 def run(grav, tint, semi_major, fsed):
