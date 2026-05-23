@@ -349,37 +349,18 @@ if parallel:
 
     if rank == 0:
         print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
-        try:
-            all_tasks = list(generate_tasks())
-            total_tasks = len(all_tasks)
-            print(f"Total tasks to process: {total_tasks}")
-            distributed_tasks = [[] for _ in range(size)]
-            for i, task in enumerate(all_tasks):
-                distributed_tasks[i % size].append(task)
-        except Exception as e:
-            print(f"Error generating tasks: {e}")
-            print(traceback.format_exc())
-            distributed_tasks = None
-    else:
-        distributed_tasks = None
-        total_tasks = None
-
-    local_tasks = comm.scatter(distributed_tasks, root=0)
 
     local_completed = 0
     local_failed = 0
 
-    if local_tasks is not None:
-        for grav, tint, semi_major, fsed in local_tasks:
+    # Each rank streams tasks from the generator and processes only its assigned ones
+    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+        if i % size == rank:  # Only process tasks assigned to this rank
             result = run(grav, tint, semi_major, fsed)
             if result:
                 local_completed += 1
             else:
                 local_failed += 1
-            gc.collect()
-    else:
-        if rank == 0:
-            print("Error: local_tasks is None - task generation failed")
 
     completed = comm.allreduce(local_completed, op=MPI.SUM)
     failed = comm.allreduce(local_failed, op=MPI.SUM)
