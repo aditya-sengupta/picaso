@@ -164,13 +164,31 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     
     return temp_guess
 
-def generate_tasks():
+def count_outliers():
+    outlier_count = 0
     for grav in gravs:
         for tint in tints:
             for semi_major in semi_majors:
                 for fsed in fseds:
-                    if rerun != "outlier" or (os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and is_outlier_guess(grav, tint, semi_major, fsed) is not None):
-                        yield (grav, tint, semi_major, fsed)
+                    if os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and (is_outlier_guess(grav, tint, semi_major, fsed) is not None):
+                        outlier_count += 1
+
+    return outlier_count
+
+print(f"{count_outliers() = }")
+
+def generate_tasks():
+    k = 0
+    condition = lambda k: count_outliers() > 0 if rerun == "outlier" else k == 0
+    while condition(k):
+        for grav in gravs:
+            for tint in tints:
+                for semi_major in semi_majors:
+                    for fsed in fseds:
+                        if rerun != "outlier" or (os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and is_outlier_guess(grav, tint, semi_major, fsed) is not None):
+                            yield (grav, tint, semi_major, fsed)
+
+        k += 1
 
 def run(grav, tint, semi_major, fsed):
     try:
