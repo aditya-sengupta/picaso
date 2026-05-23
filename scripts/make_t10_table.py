@@ -65,8 +65,8 @@ for fsed in ["nc"]:  # [1, 2, 3, 4, 8]
             curr_ax.invert_yaxis()
             axs[-1, j % 3].set_xlabel("Tint (K)")
             curr_ax.set_ylabel("T10 (K)")
-            curr_ax.set_xlim((np.min(teffs), np.max(teffs)))
-            curr_ax.set_ylim((0, 5199))
+            curr_ax.set_xlim((np.min(teffs) - 100, np.max(teffs) + 100))
+            curr_ax.set_ylim((0, 6000))
             curr_ax.set_title(f"g = {grav} m/s/s, {fsed_str}")
             if j % 3 > 0:
                 curr_ax.yaxis.set_visible(False)

@@ -113,13 +113,63 @@ def initial_guess(fname):
 
     return temp_guess, nstr_upper
 
+def is_outlier_guess(grav, tint, semi_major, fsed):
+    """
+    Check if the provided point is an outlier on the T10 grid.
+    If it is, provide an initial temperature guess with which to do a rerun.
+    If it's not, return None.
+    """
+    step = 100 if sweep == "coarse" else 10
+    temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
+    above_lower, below_upper = True, True
+    with h5py.File(fname) as f:
+        t10_current = f.attrs["t10"]
+
+    lower_temperature, upper_temperature = tint - step, tint + step
+    while lower_temperature is not None and not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
+        lower_temperature -= step
+        if lower_temperature < 100:
+            # we're off-grid
+            lower_temperature = None
+            
+    while upper_temperature is not None and not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
+        upper_temperature += step
+        if upper_temperature > 2400:
+            upper_temperature = None
+
+    if lower_temperature is not None:
+        with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
+            t10_lower = f.attrs["t10"]
+            temp_lower = np.array(f["temperature"])
+            above_lower = t10_current > t10_lower
+
+    if upper_temperature is not None:
+        with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
+            t10_upper = f.attrs["t10"]
+            temp_upper = np.array(f["temperature"])
+            below_upper = t10_current < t10_upper
+    
+    if above_lower and below_upper:
+        return None
+    elif (not above_lower) and (not below_upper):
+        # weighted average
+        w_down, w_up = tint - lower_temperature, upper_temperature - tint
+        w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
+        temp_guess = temp_lower * w_up + temp_upper * w_down
+    elif not above_lower:
+        temp_guess = temp_lower
+    elif not below_upper:
+        temp_guess = temp_upper
+    
+    return temp_guess
+
 def generate_tasks():
-    """Generate all task tuples without storing them all in memory."""
     for grav in gravs:
         for tint in tints:
             for semi_major in semi_majors:
                 for fsed in fseds:
-                    yield (grav, tint, semi_major, fsed)
+                    if rerun != "outlier" or is_outlier_guess(grav, tint, semi_major, fsed):
+                        yield (grav, tint, semi_major, fsed)
 
 def run(grav, tint, semi_major, fsed):
     try:
@@ -191,48 +241,12 @@ def run(grav, tint, semi_major, fsed):
 
         # next bit of logic, 'outlier' reruns.
         if rerun == "outlier" and os.path.exists(fname):
-            step = 100 if sweep == "coarse" else 10
-            temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
-            above_lower, below_upper = True, True
-            with h5py.File(fname) as f:
-                t10_current = f.attrs["t10"]
-
-            lower_temperature, upper_temperature = tint - step, tint + step
-            while lower_temperature is not None and not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
-                lower_temperature -= step
-                if lower_temperature < 100:
-                    # we're off-grid
-                    lower_temperature = None
-                    
-            while upper_temperature is not None and not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
-                upper_temperature += step
-                if upper_temperature > 2400:
-                    upper_temperature = None
-
-            if lower_temperature is not None:
-                with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
-                    t10_lower = f.attrs["t10"]
-                    temp_lower = np.array(f["temperature"])
-                    above_lower = t10_current > t10_lower
-
-            if upper_temperature is not None:
-                with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
-                    t10_upper = f.attrs["t10"]
-                    temp_upper = np.array(f["temperature"])
-                    below_upper = t10_current < t10_upper
-            
-            if above_lower and below_upper:
-                print(f"[{grav}, {tint}, {semi_major}, {fsed}] not an outlier, skipping.")
+            temp_guess = is_outlier_guess(grav, tint, semi_major, fsed)
+            if temp_guess is None:
+                print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - not an outlier")
                 return True
-            elif (not above_lower) and (not below_upper):
-                # weighted average
-                w_down, w_up = tint - lower_temperature, upper_temperature - tint
-                w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
-                temp_guess = temp_lower * w_up + temp_upper * w_down
-            elif not above_lower:
-                temp_guess = temp_lower
-            elif not below_upper:
-                temp_guess = temp_upper
+                # in principle this path shouldn't be reachable, because generate_tasks should filter out all non outliers
+                # in practice, I think there'll be weird execution order things
             nstr_upper = 89
 
         nstr_upper_init = nstr_upper
