@@ -11,6 +11,7 @@ import argparse
 import warnings
 warnings.filterwarnings('ignore')
 import traceback
+from time import sleep
 
 import picaso
 import picaso.justdoit as jdi
@@ -41,8 +42,6 @@ parser.add_argument('save')
 parser.add_argument('rerun')
 args = parser.parse_args()
 sweep, cloudy, irradiated, save, rerun = str(args.sweep), str(args.cloudy), str(args.irradiated), str(args.save), str(args.rerun)
-
-print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
 
 cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
 virga_path = os.getenv('virga')
@@ -181,7 +180,7 @@ def count_outliers():
 
 def generate_tasks():
     k = 0
-    outliers_found = True  # Start with True to enter loop on first iteration
+    outliers_found = True
     while outliers_found if rerun == "outlier" else k == 0:
         for grav in gravs:
             for tint in tints:
@@ -190,11 +189,9 @@ def generate_tasks():
                         if rerun != "outlier" or (os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and is_outlier_guess(grav, tint, semi_major, fsed) is not None):
                             yield (grav, tint, semi_major, fsed)
 
-        # Only recheck outliers if on outlier mode and we're about to loop again
         if rerun == "outlier" and k == 0:
             outliers_found = count_outliers() > 0
-        else:
-            outliers_found = False
+
         k += 1
 
 def run(grav, tint, semi_major, fsed):
@@ -351,11 +348,11 @@ if parallel:
     size = comm.Get_size()
 
     if rank == 0:
+        print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
         try:
             all_tasks = list(generate_tasks())
             total_tasks = len(all_tasks)
             print(f"Total tasks to process: {total_tasks}")
-            # Distribute tasks evenly across ranks
             distributed_tasks = [[] for _ in range(size)]
             for i, task in enumerate(all_tasks):
                 distributed_tasks[i % size].append(task)
@@ -374,7 +371,6 @@ if parallel:
 
     if local_tasks is not None:
         for grav, tint, semi_major, fsed in local_tasks:
-            print("starting to run")
             result = run(grav, tint, semi_major, fsed)
             if result:
                 local_completed += 1

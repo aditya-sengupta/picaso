@@ -60,7 +60,7 @@ for fsed in ["nc"]:  # [1, 2, 3, 4, 8]
 
             label = f"a = {semimajor} au" if semimajor < np.inf else "no star"
             curr_ax = axs[j // 3, j % 3]
-            curr_ax.scatter(teffs_this, t10s, color=c, label=label, s=2)
+            curr_ax.scatter(teffs_this, t10s, color=c, label=label, s=1/2)
             # lw=1 if semimajor < np.inf else 2
             curr_ax.invert_yaxis()
             axs[-1, j % 3].set_xlabel("Tint (K)")
