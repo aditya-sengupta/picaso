@@ -4,9 +4,9 @@
 #SBATCH --account=cpuq       # queue for job submission
 #SBATCH --mail-type=BEGIN,END,FAIL         # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=adityars@ucsc.edu   # Where to send mail
-#SBATCH --ntasks=640                  # Number of MPI ranks
-#SBATCH --nodes=16                    # Number of nodes
-#SBATCH --ntasks-per-node=40         # How many tasks on each node
+#SBATCH --ntasks=200                  # Number of MPI ranks
+#SBATCH --nodes=8                    # Number of nodes
+#SBATCH --ntasks-per-node=25         # How many tasks on each node
 #SBATCH --time=24:00:00              # Time limit hrs:min:sec
 #SBATCH --output=unified_%j.log     # Standard output and error log
 

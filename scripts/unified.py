@@ -183,29 +183,25 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                 tint_trial += 10
 
 def generate_tasks():
-    k = 0
     current_outliers = []
-    while len(current_outliers) > 0 or k == 0:
-        for grav in gravs:
-            for tint in tints:
-                for semi_major in semi_majors:
-                    for fsed in fseds:
-                        if rerun != "outlier":
-                            yield (grav, tint, semi_major, fsed)
-                        elif os.path.exists(fname_from_params(grav, tint, semi_major, fsed)): 
-                            temp_guess, t10_diff = is_outlier_guess(grav, tint, semi_major, fsed)
-                            if temp_guess is not None:
-                                current_outliers.append((grav, tint, semi_major, fsed))
+    for grav in gravs:
+        for tint in tints:
+            for semi_major in semi_majors:
+                for fsed in fseds:
+                    if rerun != "outlier":
+                        yield (grav, tint, semi_major, fsed)
+                    elif os.path.exists(fname_from_params(grav, tint, semi_major, fsed)): 
+                        temp_guess, t10_diff = is_outlier_guess(grav, tint, semi_major, fsed)
+                        if temp_guess is not None:
+                            current_outliers.append((grav, tint, semi_major, fsed))
 
-        if rerun == "outlier":
-            if len(current_outliers) == 0:
-                return
-            current_outliers_with_t10 = [(p, is_outlier_guess(*p)[1]) for p in current_outliers]
-            current_outliers_with_t10.sort(key=lambda x: -x[1])
-            for el in current_outliers_with_t10:
-                yield el[0]
-
-        k += 1
+    if rerun == "outlier":
+        if len(current_outliers) == 0:
+            return
+        current_outliers_with_t10 = [(p, is_outlier_guess(*p)[1]) for p in current_outliers]
+        current_outliers_with_t10.sort(key=lambda x: -x[1])
+        for el in current_outliers_with_t10:
+            yield el[0]
 
 def run(grav, tint, semi_major, fsed, rank=-1):
     try:
@@ -366,14 +362,14 @@ if parallel:
     local_completed = 0
     local_failed = 0
 
-    # Each rank streams tasks from the generator and processes only its assigned ones
-    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
-        if i % size == rank:  # Only process tasks assigned to this rank
-            result = run(grav, tint, semi_major, fsed, rank)
-            if result:
-                local_completed += 1
-            else:
-                local_failed += 1
+    while len(generate_tasks()) > 0:
+        for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+            if i % size == rank:
+                result = run(grav, tint, semi_major, fsed, rank)
+                if result:
+                    local_completed += 1
+                else:
+                    local_failed += 1
 
     completed = comm.allreduce(local_completed, op=MPI.SUM)
     failed = comm.allreduce(local_failed, op=MPI.SUM)
