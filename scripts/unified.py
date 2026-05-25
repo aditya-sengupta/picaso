@@ -362,7 +362,7 @@ if parallel:
     local_completed = 0
     local_failed = 0
 
-    while len(generate_tasks()) > 0:
+    while len(list(generate_tasks())) > 0:
         for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
             if i % size == rank:
                 result = run(grav, tint, semi_major, fsed, rank)
