@@ -168,7 +168,6 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         
         return temp_guess, outlier_magnitude
     except Exception as e:
-        raise e
         # there's a problem with some file read
         # so search upwards until we get a file we can read, and use that as the guess
         tint_trial = tint + 10
