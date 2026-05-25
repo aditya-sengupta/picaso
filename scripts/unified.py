@@ -58,7 +58,7 @@ ck_stem += ".hdf5"
 ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 
 sonora_profile_db = os.path.join(__refdata__,'sonora_grids', 'bobcat', "structures_m+0.0")
-bobcat_temps = np.arange(200, 2401, 10) # it's not quite this, but this'll do fine
+bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
 # effective^4 = equilibrium^4 + intrinsic^4
