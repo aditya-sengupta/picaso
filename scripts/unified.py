@@ -152,7 +152,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                 temp_upper = np.array(f["temperature"])
                 below_upper = t10_current < t10_upper
                 if below_upper:
-                    outlier_magnitude = max(outlier_magnitude, abs(t10_lower - t10_current))
+                    outlier_magnitude = max(outlier_magnitude, abs(t10_upper - t10_current))
         
         if above_lower and below_upper:
             return None, 0
@@ -168,6 +168,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         
         return temp_guess, outlier_magnitude
     except Exception as e:
+        raise e
         # there's a problem with some file read
         # so search upwards until we get a file we can read, and use that as the guess
         tint_trial = tint + 10
