@@ -155,7 +155,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                     outlier_magnitude = max(outlier_magnitude, abs(t10_lower - t10_current))
         
         if above_lower and below_upper:
-            return None, None
+            return None, 0
         elif (not above_lower) and (not below_upper):
             # weighted average
             w_down, w_up = tint - lower_temperature, upper_temperature - tint
