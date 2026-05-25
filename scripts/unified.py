@@ -118,8 +118,8 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     If it is, provide an initial temperature guess with which to do a rerun.
     If it's not, return None.
     """
+    fname = fname_from_params(grav, tint, semi_major, fsed)
     try:
-        fname = fname_from_params(grav, tint, semi_major, fsed)
         step = 100 if sweep == "coarse" else 10
         temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
         above_lower, below_upper = True, True
@@ -164,8 +164,17 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         
         return temp_guess
     except Exception as e:
-        print(f"Error in is_outlier_guess for [{grav}, {tint}, {semi_major}, {fsed}]: {e}")
-        return None
+        # there's a problem with some file read
+        # so search upwards until we get a file we can read, and use that as the guess
+        tint_trial = tint
+        while tint_trial <= 2400:
+            try:
+                fname_trial = fname_from_params(grav, tint_trial, semi_major, fsed)
+                with h5py.File(fname) as f:
+                    temp_guess = np.array(f["temperature"])
+                return temp_guess
+            except Exception as e2:
+                tint_trial += 10
 
 def count_outliers():
     outlier_count = 0
@@ -194,7 +203,7 @@ def generate_tasks():
 
         k += 1
 
-def run(grav, tint, semi_major, fsed):
+def run(grav, tint, semi_major, fsed, rank=-1):
     try:
         # if this is a cloudy run and the equivalent cloudless run doesn't exist, you gotta skip
         if fsed > 0:
@@ -274,7 +283,7 @@ def run(grav, tint, semi_major, fsed):
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
-        print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper}")
+        print(f"[{grav}, {tint}, {semi_major}, {fsed}] Starting at nstr_upper = {nstr_upper} on rank {rank}")
 
         calc_type = "planet" if semi_major > 0 else "browndwarf"
         cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
@@ -299,7 +308,7 @@ def run(grav, tint, semi_major, fsed):
             cl_run.fix_virga_clouds(virga_out)
 
         cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=True)
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
@@ -356,7 +365,7 @@ if parallel:
     # Each rank streams tasks from the generator and processes only its assigned ones
     for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
         if i % size == rank:  # Only process tasks assigned to this rank
-            result = run(grav, tint, semi_major, fsed)
+            result = run(grav, tint, semi_major, fsed, rank)
             if result:
                 local_completed += 1
             else:
