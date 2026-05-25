@@ -58,7 +58,7 @@ ck_stem += ".hdf5"
 ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 
 sonora_profile_db = os.path.join(__refdata__,'sonora_grids', 'bobcat', "structures_m+0.0")
-bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
+bobcat_temps = np.arange(200, 2401, 10) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
 # effective^4 = equilibrium^4 + intrinsic^4
@@ -121,7 +121,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     fname = fname_from_params(grav, tint, semi_major, fsed)
     try:
         step = 100 if sweep == "coarse" else 10
-        temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
+        temp_lower, temp_upper, t10_lower, t10_upper, t10_current, outlier_magnitude = None, None, None, None, None, 0
         above_lower, below_upper = True, True
         with h5py.File(fname) as f:
             t10_current = f.attrs["t10"]
@@ -143,15 +143,19 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                 t10_lower = f.attrs["t10"]
                 temp_lower = np.array(f["temperature"])
                 above_lower = t10_current > t10_lower
+                if above_lower:
+                    outlier_magnitude = max(outlier_magnitude, abs(t10_lower - t10_current))
 
         if upper_temperature is not None:
             with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
                 t10_upper = f.attrs["t10"]
                 temp_upper = np.array(f["temperature"])
                 below_upper = t10_current < t10_upper
+                if below_upper:
+                    outlier_magnitude = max(outlier_magnitude, abs(t10_lower - t10_current))
         
         if above_lower and below_upper:
-            return None
+            return None, None
         elif (not above_lower) and (not below_upper):
             # weighted average
             w_down, w_up = tint - lower_temperature, upper_temperature - tint
@@ -162,44 +166,44 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         elif not below_upper:
             temp_guess = temp_upper
         
-        return temp_guess
+        return temp_guess, outlier_magnitude
     except Exception as e:
         # there's a problem with some file read
         # so search upwards until we get a file we can read, and use that as the guess
-        tint_trial = tint
+        tint_trial = tint + 10
         while tint_trial <= 2400:
             try:
                 fname_trial = fname_from_params(grav, tint_trial, semi_major, fsed)
                 with h5py.File(fname) as f:
                     temp_guess = np.array(f["temperature"])
-                return temp_guess
+                    t10_guess = f.attrs["t10"]
+                return temp_guess, 0 
+                # deprioritizes this point, but does mark it as needing a rerun
             except Exception as e2:
                 tint_trial += 10
 
-def count_outliers():
-    outlier_count = 0
-    for grav in gravs:
-        for tint in tints:
-            for semi_major in semi_majors:
-                for fsed in fseds:
-                    if os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and (is_outlier_guess(grav, tint, semi_major, fsed) is not None):
-                        outlier_count += 1
-
-    return outlier_count
-
 def generate_tasks():
     k = 0
-    outliers_found = True
-    while outliers_found if rerun == "outlier" else k == 0:
+    current_outliers = []
+    while len(current_outliers) > 0 or k == 0:
         for grav in gravs:
             for tint in tints:
                 for semi_major in semi_majors:
                     for fsed in fseds:
-                        if rerun != "outlier" or (os.path.exists(fname_from_params(grav, tint, semi_major, fsed)) and is_outlier_guess(grav, tint, semi_major, fsed) is not None):
+                        if rerun != "outlier":
                             yield (grav, tint, semi_major, fsed)
+                        elif os.path.exists(fname_from_params(grav, tint, semi_major, fsed)): 
+                            temp_guess, t10_diff = is_outlier_guess(grav, tint, semi_major, fsed)
+                            if temp_guess is not None:
+                                current_outliers.append((grav, tint, semi_major, fsed))
 
-        if rerun == "outlier" and k == 0:
-            outliers_found = count_outliers() > 0
+        if rerun == "outlier":
+            if len(current_outliers) == 0:
+                return
+            current_outliers_with_t10 = [(p, is_outlier_guess(*p)[1]) for p in current_outliers]
+            current_outliers_with_t10.sort(key=lambda x: -x[1])
+            for el in current_outliers_with_t10:
+                yield el[0]
 
         k += 1
 
@@ -273,7 +277,7 @@ def run(grav, tint, semi_major, fsed, rank=-1):
 
         # next bit of logic, 'outlier' reruns.
         if rerun == "outlier" and os.path.exists(fname):
-            temp_guess = is_outlier_guess(grav, tint, semi_major, fsed)
+            temp_guess, _ = is_outlier_guess(grav, tint, semi_major, fsed)
             if temp_guess is None:
                 print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - not an outlier")
                 return True
@@ -308,7 +312,7 @@ def run(grav, tint, semi_major, fsed, rank=-1):
             cl_run.fix_virga_clouds(virga_out)
 
         cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=True)
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
