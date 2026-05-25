@@ -181,6 +181,8 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                 # deprioritizes this point, but does mark it as needing a rerun
             except Exception as e2:
                 tint_trial += 10
+        
+        return None, 0
 
 def generate_tasks():
     current_outliers = []
