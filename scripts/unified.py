@@ -6,6 +6,7 @@
 # better handling of when runs have already been done
 
 import os
+import psutil
 import sys
 import argparse
 import warnings
@@ -61,6 +62,7 @@ sonora_profile_db = os.path.join(__refdata__,'sonora_grids', 'bobcat', "structur
 bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
+gases_fly = ['CO','CH4','H2O','NH3','CO2','N2','HCN','H2','C2H2','C2H4','C2H6','Na','K','PH3','FeH','SO2','H2S']
 # effective^4 = equilibrium^4 + intrinsic^4
 
 step = 100 if sweep == "coarse" else 10
@@ -72,7 +74,7 @@ gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
 
 if cloudy == "cloudy":
-    fseds = [-1, 1, 2, 3, 4, 8]
+    fseds = [1, 2, 3, 4, 8]
 else:
     fseds = [-1]
 
@@ -205,7 +207,7 @@ def generate_tasks():
         for el in current_outliers_with_t10:
             yield el[0]
 
-def run(grav, tint, semi_major, fsed, rank=-1):
+def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
     try:
         # if this is a cloudy run and the equivalent cloudless run doesn't exist, you gotta skip
         if fsed > 0:
@@ -291,8 +293,6 @@ def run(grav, tint, semi_major, fsed, rank=-1):
         cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
         cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
         cl_run.effective_temp(tint) # input effective temperature
-        gases_fly = ['CO','CH4','H2O','NH3','CO2','N2','HCN','H2','C2H2','C2H4','C2H6','Na','K','PH3','FeH','SO2','H2S']
-        opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
 
         if semi_major > 0:
             cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
@@ -332,7 +332,7 @@ def run(grav, tint, semi_major, fsed, rank=-1):
         
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
         
-        del cl_run, opacity_ck, out, temp_guess
+        del cl_run, out, temp_guess
         if 'virga_out' in locals():
             del virga_out
         if 'virga_planet' in locals():
@@ -351,45 +351,34 @@ def run(grav, tint, semi_major, fsed, rank=-1):
         print(traceback.format_exc())
         return False
 
-parallel = True # just for debugging
 
-if parallel:
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
-    if rank == 0:
-        print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
+opacity_ck = None
+if rank == 0:
+    print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
 
-    local_completed = 0
-    local_failed = 0
+opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
+comm.Barrier()
 
-    while len(list(generate_tasks())) > 0:
-        for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
-            if i % size == rank:
-                result = run(grav, tint, semi_major, fsed, rank)
-                if result:
-                    local_completed += 1
-                else:
-                    local_failed += 1
+local_completed = 0
+local_failed = 0
 
-    completed = comm.allreduce(local_completed, op=MPI.SUM)
-    failed = comm.allreduce(local_failed, op=MPI.SUM)
+while len(list(generate_tasks())) > 0:
+    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+        if i % size == rank and opacity_ck is not None:
+            result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
+            if result:
+                local_completed += 1
+            else:
+                local_failed += 1
 
-    if rank == 0:
-        print(f"\n=== Summary ===")
-        print(f"Total Completed: {completed}")
-        print(f"Total Failed: {failed}")
-else:
-    tasks = generate_tasks()
-    completed, failed = 0, 0
-    for task in tasks:
-        result = run(*task)
-        if result:
-            completed += 1
-        else:
-            failed += 1
+completed = comm.allreduce(local_completed, op=MPI.SUM)
+failed = comm.allreduce(local_failed, op=MPI.SUM)
 
+if rank == 0:
     print(f"\n=== Summary ===")
     print(f"Total Completed: {completed}")
     print(f"Total Failed: {failed}")
