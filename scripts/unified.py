@@ -168,6 +168,12 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         elif not below_upper:
             temp_guess = temp_upper
         
+        status_str = f"Identified {grav, tint, semi_major, fsed} as an outlier:"
+        if temp_lower is not None:
+            status_str += f"lower = {t10_lower:.3f}"
+        status_str += f"current = {t10_current:.3f}"
+        if temp_upper is not None:
+            status_str += f"upper = {t10_upper:.3f}"
         return temp_guess, outlier_magnitude
     except Exception as e:
         # there's a problem with some file read
@@ -316,7 +322,9 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             f["temp_guess"] = temp_guess_init
             f.attrs["nstr_upper_init"] = nstr_upper_init
             f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
-            f.attrs["t10"] = t10(pressure_grid, out["temperature"])
+            t10_this = t10(pressure_grid, out["temperature"])
+            f.attrs["t10"] = t10_this
+            print(f"t10 at {grav, tint, semi_major, fsed} = {t10_this:.3f}")
             if save == "full":
                 out_to_hdf5(out, f)
             else:
