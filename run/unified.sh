@@ -6,7 +6,7 @@
 #SBATCH --mail-user=adityars@ucsc.edu   # Where to send mail
 #SBATCH --ntasks=s                  # Number of MPI ranks
 #SBATCH --nodes=1                    # Number of nodes
-#SBATCH --ntasks-per-node=1         # How many tasks on each node
+#SBATCH --ntasks-per-node=40         # How many tasks on each node
 #SBATCH --time=24:00:00              # Time limit hrs:min:sec
 #SBATCH --output=unified_%j.log     # Standard output and error log
 
@@ -17,7 +17,6 @@ export H5_NANOSLEEP=1000000
 
 module load python
 module load openmpi
-
-mpiexec --bind-to core --map-by core -n 640 /home/adityars/anaconda3/envs/mpitest/bin/python -m mpi4py scripts/unified.py fine cloudless irradiated full outlier # Mukherjee+26 and Bobcat match
+/home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudless irradiated partial outlier # Mukherjee+26 and Bobcat match
 
 date
