@@ -144,7 +144,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
             with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
                 t10_lower = f.attrs["t10"]
                 temp_lower = np.array(f["temperature"])
-                above_lower = t10_current > t10_lower
+                above_lower = t10_current >= t10_lower
                 if above_lower:
                     outlier_magnitude = max(outlier_magnitude, abs(t10_lower - t10_current))
 
@@ -152,7 +152,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
             with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
                 t10_upper = f.attrs["t10"]
                 temp_upper = np.array(f["temperature"])
-                below_upper = t10_current < t10_upper
+                below_upper = t10_current <= t10_upper
                 if below_upper:
                     outlier_magnitude = max(outlier_magnitude, abs(t10_upper - t10_current))
         
@@ -360,6 +360,7 @@ size = comm.Get_size()
 opacity_ck = None
 if rank == 0:
     print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
+    print(len(list(generate_tasks())))
 
 opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
 comm.Barrier()
@@ -367,14 +368,13 @@ comm.Barrier()
 local_completed = 0
 local_failed = 0
 
-while len(list(generate_tasks())) > 0:
-    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
-        if i % size == rank and opacity_ck is not None:
-            result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
-            if result:
-                local_completed += 1
-            else:
-                local_failed += 1
+for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+    if i % size == rank and opacity_ck is not None:
+        result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
+        if result:
+            local_completed += 1
+        else:
+            local_failed += 1
 
 completed = comm.allreduce(local_completed, op=MPI.SUM)
 failed = comm.allreduce(local_failed, op=MPI.SUM)
