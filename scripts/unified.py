@@ -174,6 +174,8 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         status_str += f"current = {t10_current:.3f}"
         if temp_upper is not None:
             status_str += f"upper = {t10_upper:.3f}"
+
+        print(status_str)
         return temp_guess, outlier_magnitude
     except Exception as e:
         # there's a problem with some file read
