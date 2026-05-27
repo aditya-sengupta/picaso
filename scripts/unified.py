@@ -168,10 +168,10 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         elif not below_upper:
             temp_guess = temp_upper
         
-        status_str = f"Identified {grav, tint, semi_major, fsed} as an outlier:"
+        status_str = f"Identified {grav, tint, semi_major, fsed} as an outlier: "
         if temp_lower is not None:
-            status_str += f"lower = {t10_lower:.3f}"
-        status_str += f"current = {t10_current:.3f}"
+            status_str += f"lower = {t10_lower:.3f}, "
+        status_str += f"current = {t10_current:.3f}, "
         if temp_upper is not None:
             status_str += f"upper = {t10_upper:.3f}"
 
@@ -195,7 +195,6 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         return None, 0
 
 def generate_tasks():
-    current_outliers = []
     for grav in gravs:
         for tint in tints:
             for semi_major in semi_majors:
@@ -205,15 +204,7 @@ def generate_tasks():
                     elif os.path.exists(fname_from_params(grav, tint, semi_major, fsed)): 
                         temp_guess, t10_diff = is_outlier_guess(grav, tint, semi_major, fsed)
                         if temp_guess is not None:
-                            current_outliers.append((grav, tint, semi_major, fsed))
-
-    if rerun == "outlier":
-        if len(current_outliers) == 0:
-            return
-        current_outliers_with_t10 = [(p, is_outlier_guess(*p)[1]) for p in current_outliers]
-        current_outliers_with_t10.sort(key=lambda x: -x[1])
-        for el in current_outliers_with_t10:
-            yield el[0]
+                            yield (grav, tint, semi_major, fsed)
 
 def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
     try:
