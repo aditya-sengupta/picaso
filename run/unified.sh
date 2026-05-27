@@ -17,6 +17,7 @@ export H5_NANOSLEEP=1000000
 
 module load python
 module load openmpi
-/home/adityars/anaconda3/envs/mpitest/bin/python scripts/unified.py fine cloudless irradiated partial outlier # Mukherjee+26 and Bobcat match
+
+mpiexec --bind-to core --map-by core -n 2 /home/adityars/anaconda3/envs/mpitest/bin/python -m mpi4py scripts/unified.py fine cloudless irradiated full outlier # Mukherjee+26 and Bobcat match
 
 date

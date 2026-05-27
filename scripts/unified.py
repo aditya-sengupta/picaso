@@ -352,42 +352,33 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
         print(traceback.format_exc())
         return False
 
-parallel = False
-if parallel:
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
-    opacity_ck = None
-    if rank == 0:
-        print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
-        print(len(list(generate_tasks())))
-
-    opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
-    comm.Barrier()
-
-    local_completed = 0
-    local_failed = 0
-
-    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
-        if i % size == rank and opacity_ck is not None:
-            result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
-            if result:
-                local_completed += 1
-            else:
-                local_failed += 1
-
-    completed = comm.allreduce(local_completed, op=MPI.SUM)
-    failed = comm.allreduce(local_failed, op=MPI.SUM)
-
-    if rank == 0:
-        print(f"\n=== Summary ===")
-        print(f"Total Completed: {completed}")
-        print(f"Total Failed: {failed}")
-else:
+opacity_ck = None
+if rank == 0:
     print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
-    tasks = list(generate_tasks())
-    print(len(tasks))
-    opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
-    for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
-        run(grav, tint, semi_major, fsed, opacity_ck)
+    print(len(list(generate_tasks())))
+
+opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
+comm.Barrier()
+
+local_completed = 0
+local_failed = 0
+
+for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+    if i % size == rank and opacity_ck is not None:
+        result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
+        if result:
+            local_completed += 1
+        else:
+            local_failed += 1
+
+completed = comm.allreduce(local_completed, op=MPI.SUM)
+failed = comm.allreduce(local_failed, op=MPI.SUM)
+
+if rank == 0:
+    print(f"\n=== Summary ===")
+    print(f"Total Completed: {completed}")
+    print(f"Total Failed: {failed}")
