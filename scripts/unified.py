@@ -385,6 +385,9 @@ if parallel:
         print(f"Total Completed: {completed}")
         print(f"Total Failed: {failed}")
 else:
+    print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
+    tasks = list(generate_tasks())
+    print(len(tasks))
     opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
-    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+    for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
         run(grav, tint, semi_major, fsed, opacity_ck)
