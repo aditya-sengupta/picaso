@@ -12,22 +12,22 @@ picaso_path = os.path.dirname(os.path.dirname(__refdata__))
 bobcat_path = os.path.join(__refdata__, "sonora_grids", "bobcat")
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in ["nc"]:  # [1, 2, 3, 4, 8]
-    fsed_str = f"fsed{fsed}" if fsed != "nc" else "nc"
-    fig, axs = plt.subplots(4, 3, figsize=(8, 10))
+for fsed in [1, 2, 3, 4, 8]:
+    fsed_str = f"f{fsed}" if fsed != "nc" else "nc"
+    fig, axs = plt.subplots(2, 3, figsize=(8, 6))
     # log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
     # gravs = [17, 31, 100, 316, 1000, 3160]
     log_gravs = [3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 5.25, 5.5]
     gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
     semimajors = [0.02, 0.04, 0.13, 0.5, np.inf]
-    teffs = np.arange(100, 2401, 10)
-    cmap = cm.magma(np.linspace(0, 1, len(semimajors) + 1))[:-1]
+    teffs = np.arange(100, 2401, 50)
+    cmap = cm.magma(np.linspace(0, 1, len(gravs) + 1))[:-1]
 
-    for semimajor, c in zip(semimajors, cmap):
+    for (k, semimajor) in enumerate(semimajors):
         all_teffs = []
         all_t10s = []
         count_available, count_all = 0, 0
-        for j, grav in enumerate(gravs):
+        for j, (loggrav, grav, c) in enumerate(zip(log_gravs, gravs, cmap)):
             teffs_this = []
             t10s = []
             for teff in teffs:
@@ -54,23 +54,24 @@ for fsed in ["nc"]:  # [1, 2, 3, 4, 8]
                                     t10s.append(t10(pressure, temperature))
                     except Exception:
                         continue
+                else:
+                    pass
 
             all_teffs.append(teffs_this)
             all_t10s.append(t10s)
 
-            label = f"a = {semimajor} au" if semimajor < np.inf else "no star"
-            curr_ax = axs[j // 3, j % 3]
-            curr_ax.plot(teffs_this, t10s, color=c, label=label)
-            # lw=1 if semimajor < np.inf else 2
+            t = f"a = {semimajor} au" if semimajor < np.inf else "no star"
+            curr_ax = axs[k // 3, k % 3]
+            curr_ax.plot(teffs_this, t10s, color=c, label=f"log g = {loggrav}")
             curr_ax.invert_yaxis()
-            axs[-1, j % 3].set_xlabel("Tint (K)")
+            axs[1, k % 3].set_xlabel("Tint (K)")
             curr_ax.set_ylabel("T10 (K)")
-            curr_ax.set_xlim((np.min(teffs) - 100, np.max(teffs) + 100))
-            curr_ax.set_ylim((0, 6000))
-            curr_ax.set_title(f"g = {grav} m/s/s, {fsed_str}")
-            if j % 3 > 0:
+            curr_ax.set_xlim((np.min(teffs) - 10, np.max(teffs) + 10))
+            curr_ax.set_ylim((0, 5000))
+            curr_ax.set_title(f"{t}, {fsed_str}")
+            if k % 3 > 0:
                 curr_ax.yaxis.set_visible(False)
-            if j // 3 < 3:
+            if k // 3 == 0:
                 curr_ax.xaxis.set_visible(False)
 
         print(f"{fsed = }, {semimajor = }: {count_available} / {count_all}")
@@ -86,7 +87,8 @@ for fsed in ["nc"]:  # [1, 2, 3, 4, 8]
             logT10=np.log10(T10_table),
         )
 
-    axs[0, 0].legend(fontsize="small")
+    axs[1,1].legend(fontsize="small", bbox_to_anchor=(1.2, 1.05))
+    fig.delaxes(axs[1,2])
     figpath = os.path.join(picaso_path, f"figures/t10/t10_table_{fsed_str}.png")
     plt.savefig(figpath, dpi=600)
     print(figpath)

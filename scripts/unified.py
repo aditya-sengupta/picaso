@@ -65,10 +65,8 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 gases_fly = ['CO','CH4','H2O','NH3','CO2','N2','HCN','H2','C2H2','C2H4','C2H6','Na','K','PH3','FeH','SO2','H2S']
 # effective^4 = equilibrium^4 + intrinsic^4
 
-step = 100 if sweep == "coarse" else 10
+step = 100 if sweep == "coarse" else 50
 tints = np.arange(100, 2401, step)
-# tints = np.delete(tints, 2) # We're taking 300K as our baseline, so not rerunning it
-np.random.shuffle(tints)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 np.random.shuffle(gravs)
@@ -107,7 +105,7 @@ def initial_guess(fname):
             nstr_upper = cvz_locs[-2]
         else:
             nstr_upper = cvz_locs[1]
-        nstr_upper += 5
+        nstr_upper = min(nstr_upper + 5, 89)
         # In case clouds make the RCB sink a bit, we want to allow this much
         # This is unmotivated and we may find it should go even deeper
         # However, having observed that the RCB tends to track the cloud base, I think it's fine
@@ -122,7 +120,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     """
     fname = fname_from_params(grav, tint, semi_major, fsed)
     try:
-        step = 100 if sweep == "coarse" else 10
+        step = 100 if sweep == "coarse" else 50
         temp_lower, temp_upper, t10_lower, t10_upper, t10_current, outlier_magnitude = None, None, None, None, None, 0
         above_lower, below_upper = True, True
         with h5py.File(fname) as f:
@@ -309,7 +307,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             cl_run.fix_virga_clouds(virga_out)
 
         cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
+        out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=True)
         
         with h5py.File(fname, "w") as f:
             f["temp_guess"] = temp_guess_init
@@ -361,7 +359,9 @@ if rank == 0:
     print(f"Starting run with {sweep = }, {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
     print(len(list(generate_tasks())))
 
-opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
+# opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
+ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f'sonora_2121grid_feh{mh}_co{CtoO}.hdf5')
+opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted')
 comm.Barrier()
 
 local_completed = 0
