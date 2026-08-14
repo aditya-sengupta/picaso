@@ -12,7 +12,7 @@ picaso_path = os.path.dirname(os.path.dirname(__refdata__))
 bobcat_path = os.path.join(__refdata__, "sonora_grids", "bobcat")
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in [1, 2, 3, 4, 8]:
+for fsed in ["nc"]:
     fsed_str = f"f{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(2, 3, figsize=(8, 6))
     # log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
@@ -34,28 +34,23 @@ for fsed in [1, 2, 3, 4, 8]:
                 semimajor_str = (
                     "ns" if semimajor == np.inf else f"semimajor{semimajor:.2f}"
                 )
-                fname = f"data/unified/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
+                fname = f"data/unified_lux/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
                 count_all += 1
                 count_all_overall += 1
                 if os.path.exists(os.path.join(picaso_path, fname)):
-                    try:
-                        with h5py.File(os.path.join(picaso_path, fname)) as f:
-                            if "pressure" in f:
-                                count_available += 1
-                                count_available_overall += 1
-                                pressure, temperature = (
-                                    np.array(f["pressure"]),
-                                    np.array(f["temperature"]),
-                                )
-                                teffs_this.append(teff)
-                                if "t10" in f.attrs:
-                                    t10s.append(f.attrs["t10"])
-                                else:
-                                    t10s.append(t10(pressure, temperature))
-                    except Exception:
-                        continue
-                else:
-                    pass
+                    with h5py.File(os.path.join(picaso_path, fname)) as f:
+                        if "pressure" in f:
+                            count_available += 1
+                            count_available_overall += 1
+                            pressure, temperature = (
+                                np.array(f["pressure"]),
+                                np.array(f["temperature"]),
+                            )
+                            teffs_this.append(teff)
+                            if "t10" in f.attrs:
+                                t10s.append(f.attrs["t10"])
+                            else:
+                                t10s.append(t10(pressure, temperature))
 
             all_teffs.append(teffs_this)
             all_t10s.append(t10s)

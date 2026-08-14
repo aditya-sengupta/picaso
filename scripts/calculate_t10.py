@@ -28,7 +28,6 @@ def _dTdp(p, t):
 def t10(p_col, t_col):
     solver = ode(_dTdp).set_integrator('dopri5', rtol=1e-8, atol=1e-8, nsteps=5000)
     idx = np.where(t_col < 5199)[0][-1]
-    # print(f"t10 calc start at {idx}, pressure = {p_col[idx]:.3f}, temperature = {t_col[idx]:.3f}")
     solver.set_initial_value(t_col[idx], p_col[idx])
     solver.integrate(10.0)
     return float(solver.y[0])
