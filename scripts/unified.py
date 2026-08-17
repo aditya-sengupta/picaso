@@ -5,6 +5,12 @@
 # unirradiated and irradiated
 # better handling of when runs have already been done
 
+# 2026-08-17: find and return only the first outlier per track
+# the problem before was if you sort by the highest magnitude, you offset one point on the track
+# and then have to do tons of reruns
+# so I'm gonna cut out the bit that even looked at the magnitude of the T10 diff
+
+
 import os
 import psutil
 import sys
@@ -38,10 +44,9 @@ from calculate_t10 import t10, regrid_initial_guess
 parser = argparse.ArgumentParser()
 parser.add_argument('cloudy')
 parser.add_argument('irradiated')
-parser.add_argument('save')
 parser.add_argument('rerun')
 args = parser.parse_args()
-cloudy, irradiated, save, rerun = str(args.cloudy), str(args.irradiated), str(args.save), str(args.rerun)
+cloudy, irradiated, rerun = str(args.cloudy), str(args.irradiated), str(args.rerun)
 
 step = 50
 
@@ -66,7 +71,6 @@ bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 tints = np.arange(100, 2401, step)
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
-np.random.shuffle(gravs)
 
 if cloudy == "cloudy":
     fseds = [1, 2, 3, 4, 8]
@@ -102,7 +106,7 @@ def initial_guess(fname):
             nstr_upper = cvz_locs[-2]
         else:
             nstr_upper = cvz_locs[1]
-        nstr_upper = min(nstr_upper + 5, 89)
+        # nstr_upper = min(nstr_upper, 89)
         # In case clouds make the RCB sink a bit, we want to allow this much
         # This is unmotivated and we may find it should go even deeper
         # However, having observed that the RCB tends to track the cloud base, I think it's fine
@@ -117,7 +121,7 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
     """
     fname = fname_from_params(grav, tint, semi_major, fsed)
     try:
-        temp_lower, temp_upper, t10_lower, t10_upper, t10_current, outlier_magnitude = None, None, None, None, None, 0
+        temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
         above_lower, below_upper = True, True
         with h5py.File(fname) as f:
             t10_current = f.attrs["t10"]
@@ -139,28 +143,16 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                 t10_lower = f.attrs["t10"]
                 temp_lower = np.array(f["temperature"])
                 above_lower = t10_current >= t10_lower
-                if above_lower:
-                    outlier_magnitude = max(outlier_magnitude, abs(t10_lower - t10_current))
 
         if upper_temperature is not None:
             with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
                 t10_upper = f.attrs["t10"]
                 temp_upper = np.array(f["temperature"])
                 below_upper = t10_current <= t10_upper
-                if below_upper:
-                    outlier_magnitude = max(outlier_magnitude, abs(t10_upper - t10_current))
-        
+
         if above_lower and below_upper:
-            return None, 0
-        elif (not above_lower) and (not below_upper):
-            # weighted average
-            w_down, w_up = tint - lower_temperature, upper_temperature - tint
-            w_down, w_up = w_down / (w_down + w_up), w_up / (w_down + w_up)
-            temp_guess = temp_lower * w_up + temp_upper * w_down
-        elif not above_lower:
-            temp_guess = temp_lower
-        elif not below_upper:
-            temp_guess = temp_upper
+            return None
+        return temp_lower
         
         status_str = f"Identified {grav, tint, semi_major, fsed} as an outlier: "
         if temp_lower is not None:
@@ -169,8 +161,8 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
         if temp_upper is not None:
             status_str += f"upper = {t10_upper:.3f}"
 
-        print(status_str)
-        return temp_guess, outlier_magnitude
+        # print(status_str)
+        return temp_guess
     except Exception as e:
         # there's a problem with some file read
         # so search upwards until we get a file we can read, and use that as the guess
@@ -181,23 +173,25 @@ def is_outlier_guess(grav, tint, semi_major, fsed):
                 with h5py.File(fname_trial) as f:
                     temp_guess = np.array(f["temperature"])
                     t10_guess = f.attrs["t10"]
-                return temp_guess, 0 
+                return temp_guess
                 # deprioritizes this point, but does mark it as needing a rerun
             except Exception as e2:
                 tint_trial += 10
         
-        return None, 0
+        return None
 
 def generate_tasks():
     for grav in gravs:
-        for tint in tints:
+        for fsed in fseds:
             for semi_major in semi_majors:
-                for fsed in fseds:
+                found_min_tint = False
+                for tint in tints:
                     if rerun != "outlier":
                         yield (grav, tint, semi_major, fsed)
                     elif os.path.exists(fname_from_params(grav, tint, semi_major, fsed)): 
-                        temp_guess, t10_diff = is_outlier_guess(grav, tint, semi_major, fsed)
-                        if temp_guess is not None:
+                        temp_guess = is_outlier_guess(grav, tint, semi_major, fsed)
+                        if temp_guess is not None and not found_min_tint:
+                            found_min_tint = True
                             yield (grav, tint, semi_major, fsed)
 
 def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
@@ -230,8 +224,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             # irradiated cloudless
             fname_unirradiated = fname_from_params(grav, tint, -1, -1)
             if os.path.exists(fname_unirradiated):
-                temp_guess, _ = initial_guess(fname_unirradiated)
-                nstr_upper = 89 # if we're on the fine grid, this should be overwritten by the nearest neighbors at this irradiation level later
+                temp_guess, nstr_upper = initial_guess(fname_unirradiated)
             else:
                 guess_bobcat = True
         else:
@@ -251,11 +244,6 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
                 nstr_upper = min(89, np.min(indices_below_bobcat))
             else:
                 nstr_upper = 89
-                
-        # we're going to look for neighbors on the coarse grid
-        # if this point itself is on the coarse grid, we shouldn't be able to hit this
-        # because it would've thrown an error when the file exists
-        # if we happen to end up here, we simply won't do any of this
 
         lower_temperature, upper_temperature = 100 * (tint // 100), 100 * (tint // 100 + 1)
         if lower_temperature != tint and upper_temperature != tint:
@@ -270,13 +258,12 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
 
         # next bit of logic, 'outlier' reruns.
         if rerun == "outlier" and os.path.exists(fname):
-            temp_guess, _ = is_outlier_guess(grav, tint, semi_major, fsed)
+            temp_guess = is_outlier_guess(grav, tint, semi_major, fsed)
             if temp_guess is None:
                 print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - not an outlier")
                 return True
                 # in principle this path shouldn't be reachable, because generate_tasks should filter out all non outliers
                 # in practice, I think there'll be weird execution order things
-            nstr_upper = 89
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
@@ -312,18 +299,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             t10_this = t10(pressure_grid, out["temperature"])
             f.attrs["t10"] = t10_this
             print(f"t10 at {grav, tint, semi_major, fsed} = {t10_this:.3f}")
-            if save == "full":
-                out_to_hdf5(out, f)
-            else:
-                f["pressure"] = pressure_grid
-                f["temperature"] = out["temperature"]
-                f["cvz_locs"] = out["cvz_locs"]
-                f["spectrum_output_thermal"] = out["spectrum_output"]["thermal"]
-                f["spectrum_output_wavenumber"] = out["spectrum_output"]["wavenumber"]
-                
-                if fsed > 0:
-                    for k in ["opd_per_layer", "asymmetry", "single_scattering", "condensate_mmr"]:
-                        f[k] = virga_out[k]
+            out_to_hdf5(out, f)
         
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
         
@@ -352,7 +328,7 @@ size = comm.Get_size()
 
 opacity_ck = None
 if rank == 0:
-    print(f"Starting run with {cloudy = }, {irradiated = }, {save = }, {rerun = } ")
+    print(f"Starting run with {cloudy = }, {irradiated = }, {rerun = } ")
     print(len(list(generate_tasks())))
 
 # opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
@@ -363,13 +339,14 @@ comm.Barrier()
 local_completed = 0
 local_failed = 0
 
-for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
-    if i % size == rank and opacity_ck is not None:
-        result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
-        if result:
-            local_completed += 1
-        else:
-            local_failed += 1
+while len(list(generate_tasks())) > 0:
+    for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+        if i % size == rank and opacity_ck is not None:
+            result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
+            if result:
+                local_completed += 1
+            else:
+                local_failed += 1
 
 completed = comm.allreduce(local_completed, op=MPI.SUM)
 failed = comm.allreduce(local_failed, op=MPI.SUM)
