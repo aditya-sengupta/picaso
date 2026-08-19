@@ -113,86 +113,12 @@ def initial_guess(fname):
 
     return temp_guess, nstr_upper
 
-def is_outlier_guess(grav, tint, semi_major, fsed):
-    """
-    Check if the provided point is an outlier on the T10 grid.
-    If it is, provide an initial temperature guess with which to do a rerun.
-    If it's not, return None.
-    """
-    fname = fname_from_params(grav, tint, semi_major, fsed)
-    try:
-        temp_lower, temp_upper, t10_lower, t10_upper, t10_current = None, None, None, None, None
-        above_lower, below_upper = True, True
-        with h5py.File(fname) as f:
-            t10_current = f.attrs["t10"]
-
-        lower_temperature, upper_temperature = tint - step, tint + step
-        while lower_temperature is not None and not os.path.exists(fname_from_params(grav, lower_temperature, semi_major, fsed)):
-            lower_temperature -= step
-            if lower_temperature < 100:
-                # we're off-grid
-                lower_temperature = None
-                
-        while upper_temperature is not None and not os.path.exists(fname_from_params(grav, upper_temperature, semi_major, fsed)):
-            upper_temperature += step
-            if upper_temperature > 2400:
-                upper_temperature = None
-
-        if lower_temperature is not None:
-            with h5py.File(fname_from_params(grav, lower_temperature, semi_major, fsed)) as f:
-                t10_lower = f.attrs["t10"]
-                temp_lower = np.array(f["temperature"])
-                above_lower = t10_current >= t10_lower
-
-        if upper_temperature is not None:
-            with h5py.File(fname_from_params(grav, upper_temperature, semi_major, fsed)) as f:
-                t10_upper = f.attrs["t10"]
-                temp_upper = np.array(f["temperature"])
-                below_upper = t10_current <= t10_upper
-
-        if above_lower and below_upper:
-            return None
-        return temp_lower
-        
-        status_str = f"Identified {grav, tint, semi_major, fsed} as an outlier: "
-        if temp_lower is not None:
-            status_str += f"lower = {t10_lower:.3f}, "
-        status_str += f"current = {t10_current:.3f}, "
-        if temp_upper is not None:
-            status_str += f"upper = {t10_upper:.3f}"
-
-        # print(status_str)
-        return temp_guess
-    except Exception as e:
-        # there's a problem with some file read
-        # so search upwards until we get a file we can read, and use that as the guess
-        tint_trial = tint + 10
-        while tint_trial <= 2400:
-            try:
-                fname_trial = fname_from_params(grav, tint_trial, semi_major, fsed)
-                with h5py.File(fname_trial) as f:
-                    temp_guess = np.array(f["temperature"])
-                    t10_guess = f.attrs["t10"]
-                return temp_guess
-                # deprioritizes this point, but does mark it as needing a rerun
-            except Exception as e2:
-                tint_trial += 10
-        
-        return None
-
 def generate_tasks():
     for grav in gravs:
         for fsed in fseds:
             for semi_major in semi_majors:
-                found_min_tint = False
                 for tint in tints:
-                    if rerun != "outlier":
-                        yield (grav, tint, semi_major, fsed)
-                    elif os.path.exists(fname_from_params(grav, tint, semi_major, fsed)): 
-                        temp_guess = is_outlier_guess(grav, tint, semi_major, fsed)
-                        if temp_guess is not None and not found_min_tint:
-                            found_min_tint = True
-                            yield (grav, tint, semi_major, fsed)
+                    yield (grav, tint, semi_major, fsed)
 
 def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
     try:
@@ -218,10 +144,8 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
         temp_guess = None
         nstr_upper = None
         guess_bobcat = False
-        if fsed > 0:
-            temp_guess, nstr_upper = initial_guess(fname_cloudless)
-        elif semi_major > 0:
-            # irradiated cloudless
+        if semi_major > 0:
+            # irradiated cloudless, guess from unirradiated cloudless
             fname_unirradiated = fname_from_params(grav, tint, -1, -1)
             if os.path.exists(fname_unirradiated):
                 temp_guess, nstr_upper = initial_guess(fname_unirradiated)
@@ -255,15 +179,6 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
                     nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
                 with h5py.File(upper_neighbor) as f:
                     nstr_upper = min(nstr_upper, f.attrs["nstr_upper_init"] + 5)
-
-        # next bit of logic, 'outlier' reruns.
-        if rerun == "outlier" and os.path.exists(fname):
-            temp_guess = is_outlier_guess(grav, tint, semi_major, fsed)
-            if temp_guess is None:
-                print(f"[{grav}, {tint}, {semi_major}, {fsed}] Skipping - not an outlier")
-                return True
-                # in principle this path shouldn't be reachable, because generate_tasks should filter out all non outliers
-                # in practice, I think there'll be weird execution order things
 
         nstr_upper_init = nstr_upper
         temp_guess_init = np.copy(temp_guess)
@@ -329,7 +244,7 @@ size = comm.Get_size()
 opacity_ck = None
 if rank == 0:
     print(f"Starting run with {cloudy = }, {irradiated = }, {rerun = } ")
-    print(len(list(generate_tasks())))
+    # print(len(list(generate_tasks())))
 
 # opacity_ck = jdi.opannection(ck_db=os.path.join(__refdata__, "climate_INPUTS", "661"),method='resortrebin',preload_gases=gases_fly)
 ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f'sonora_2121grid_feh{mh}_co{CtoO}.hdf5')
@@ -339,7 +254,7 @@ comm.Barrier()
 local_completed = 0
 local_failed = 0
 
-while len(list(generate_tasks())) > 0:
+while True:
     for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
         if i % size == rank and opacity_ck is not None:
             result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
@@ -348,10 +263,10 @@ while len(list(generate_tasks())) > 0:
             else:
                 local_failed += 1
 
-completed = comm.allreduce(local_completed, op=MPI.SUM)
-failed = comm.allreduce(local_failed, op=MPI.SUM)
+    completed = comm.allreduce(local_completed, op=MPI.SUM)
+    failed = comm.allreduce(local_failed, op=MPI.SUM)
 
-if rank == 0:
-    print(f"\n=== Summary ===")
-    print(f"Total Completed: {completed}")
-    print(f"Total Failed: {failed}")
+    if rank == 0:
+        print(f"\n=== Summary ===")
+        print(f"Total Completed: {completed}")
+        print(f"Total Failed: {failed}")

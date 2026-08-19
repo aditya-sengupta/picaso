@@ -7,7 +7,9 @@ from calculate_t10 import t10
 from matplotlib import cm
 
 __refdata__ = os.environ["picaso_refdata"]
-picaso_path = os.path.dirname(os.path.dirname(__refdata__))
+picaso_path = os.path.dirname(__refdata__)
+if not picaso_path.endswith("picaso"):
+    picaso_path = os.path.dirname(picaso_path)
 
 bobcat_path = os.path.join(__refdata__, "sonora_grids", "bobcat")
 

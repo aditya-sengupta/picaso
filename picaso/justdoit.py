@@ -5137,10 +5137,11 @@ class inputs():
         else:
             tmin = 10
 
-        if Teff > 1600:
+        tmax = 10_000
+        """if Teff > 1600:
             tmax = 10000
         else:
-            tmax = max_temp*(1+extension)
+            tmax = max_temp*(1+extension)"""
 
         Opagrid = namedtuple('Opagrid',['nwno','delta_wno','wno','ngauss','gauss_wts','tmin','tmax'])
         Opagrid = Opagrid(nwno, delta_wno, wno, opacityclass.ngauss,opacityclass.gauss_wts,tmin,tmax)
