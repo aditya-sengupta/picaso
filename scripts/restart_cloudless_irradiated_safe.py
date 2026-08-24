@@ -184,7 +184,10 @@ def parse_args():
     parser.add_argument(
         "--suppress-warnings",
         action="store_true",
-        help="Match the original script's warning suppression (warnings are visible by default).",
+        help=(
+            "Hide all warnings. By default, rank 0 prints each unique "
+            "non-ResourceWarning once and the other ranks stay quiet."
+        ),
     )
     args = parser.parse_args()
 
@@ -229,40 +232,94 @@ def _read_text(path):
         return None
 
 
+def _parse_cgroup_value(value, unlimited_threshold=None):
+    if value is None:
+        return None
+    if value == "max":
+        return value
+    try:
+        parsed = int(value)
+    except ValueError:
+        return value
+    if unlimited_threshold is not None and parsed >= unlimited_threshold:
+        return "max"
+    return parsed
+
+
 def cgroup_memory_snapshot():
-    """Return useful cgroup-v2 memory fields when they are visible."""
+    """Return useful cgroup-v2 or legacy cgroup-v1 memory fields."""
     cgroup_text = _read_text("/proc/self/cgroup")
     if not cgroup_text:
         return {}
 
-    relative = None
+    unified_relative = None
+    memory_relative = None
     for line in cgroup_text.splitlines():
         fields = line.split(":", 2)
         if len(fields) == 3 and fields[0] == "0":
-            relative = fields[2]
-            break
-    if relative is None:
-        return {}
+            unified_relative = fields[2]
+        elif len(fields) == 3 and "memory" in fields[1].split(","):
+            memory_relative = fields[2]
 
-    base = Path("/sys/fs/cgroup") / relative.lstrip("/")
-    result = {}
-    for name in ("memory.current", "memory.max", "memory.peak"):
-        value = _read_text(base / name)
-        if value is None:
-            continue
-        if value == "max":
-            result[name] = value
-        else:
-            try:
-                result[name] = int(value)
-            except ValueError:
+    if unified_relative is not None:
+        base = Path("/sys/fs/cgroup") / unified_relative.lstrip("/")
+        result = {"cgroup.version": 2}
+        for name in ("memory.current", "memory.max", "memory.peak"):
+            value = _parse_cgroup_value(_read_text(base / name))
+            if value is not None:
                 result[name] = value
 
-    events = _read_text(base / "memory.events")
-    if events:
-        for line in events.splitlines():
+        events = _read_text(base / "memory.events")
+        if events:
+            for line in events.splitlines():
+                fields = line.split()
+                if len(fields) == 2 and fields[0] in {"oom", "oom_kill", "max"}:
+                    try:
+                        result[f"event.{fields[0]}"] = int(fields[1])
+                    except ValueError:
+                        pass
+        # A namespaced cgroup can expose /proc metadata but hide its files.
+        if len(result) > 1:
+            return result
+
+    if memory_relative is None:
+        return {}
+
+    # Most HPC cgroup-v1 installations mount the memory controller here.
+    # Try both layouts because some distributions mount each controller in a
+    # subdirectory while others expose the controller at the cgroup root.
+    relative = memory_relative.lstrip("/")
+    candidates = (
+        Path("/sys/fs/cgroup/memory") / relative,
+        Path("/sys/fs/cgroup") / relative,
+    )
+    base = next(
+        (candidate for candidate in candidates if (candidate / "memory.usage_in_bytes").exists()),
+        None,
+    )
+    if base is None:
+        return {}
+
+    result = {"cgroup.version": 1}
+    v1_fields = {
+        "memory.usage_in_bytes": "memory.current",
+        "memory.limit_in_bytes": "memory.max",
+        "memory.max_usage_in_bytes": "memory.peak",
+        "memory.failcnt": "event.failcnt",
+    }
+    for source_name, result_name in v1_fields.items():
+        threshold = 1 << 60 if source_name == "memory.limit_in_bytes" else None
+        value = _parse_cgroup_value(
+            _read_text(base / source_name), unlimited_threshold=threshold
+        )
+        if value is not None:
+            result[result_name] = value
+
+    oom_control = _read_text(base / "memory.oom_control")
+    if oom_control:
+        for line in oom_control.splitlines():
             fields = line.split()
-            if len(fields) == 2 and fields[0] in {"oom", "oom_kill", "max"}:
+            if len(fields) == 2 and fields[0] in {"under_oom", "oom_kill"}:
                 try:
                     result[f"event.{fields[0]}"] = int(fields[1])
                 except ValueError:
@@ -293,12 +350,14 @@ def mark(stage, rank, detail=""):
         memory = memory_values()
         cgroup = memory["cgroup"]
         cgroup_bits = []
+        if "cgroup.version" in cgroup:
+            cgroup_bits.append(f"cg_version={cgroup['cgroup.version']}")
         for key in ("memory.current", "memory.peak", "memory.max"):
             if key in cgroup:
                 cgroup_bits.append(
                     f"cg_{key.split('.')[-1]}={format_bytes(cgroup[key])}"
                 )
-        for key in ("event.oom", "event.oom_kill"):
+        for key in ("event.oom", "event.oom_kill", "event.max", "event.failcnt"):
             if key in cgroup:
                 cgroup_bits.append(f"cg_{key.split('.')[-1]}={cgroup[key]}")
         suffix = f" {detail}" if detail else ""
@@ -451,12 +510,17 @@ def mpi_preflight(comm, expected_world_size=0):
 
 def summarize_node_rss(comm, stage, loaded_opacity=False):
     rank = comm.Get_rank()
-    sample = (
-        socket.gethostname(),
-        PROCESS.memory_info().rss,
-        peak_rss_bytes(),
-        bool(loaded_opacity),
-    )
+    try:
+        sample = (
+            socket.gethostname(),
+            PROCESS.memory_info().rss,
+            peak_rss_bytes(),
+            bool(loaded_opacity),
+            None,
+        )
+    except Exception as exc:
+        # Preserve collective ordering even if diagnostics fail on one rank.
+        sample = (socket.gethostname(), None, None, bool(loaded_opacity), repr(exc))
     samples = comm.gather(sample, root=0)
     if rank != 0:
         return
@@ -466,12 +530,16 @@ def summarize_node_rss(comm, stage, loaded_opacity=False):
         grouped[sample_item[0]].append(sample_item)
     print(f"SAFE NODE RSS SUMMARY stage={stage}", flush=True)
     for host, host_samples in sorted(grouped.items()):
-        rss_sum = sum(item[1] for item in host_samples)
-        max_peak = max(item[2] for item in host_samples)
+        rss_values = [item[1] for item in host_samples if item[1] is not None]
+        peak_values = [item[2] for item in host_samples if item[2] is not None]
+        rss_sum = sum(rss_values) if rss_values else None
+        max_peak = max(peak_values) if peak_values else None
         loaded = sum(item[3] for item in host_samples)
+        errors = [item[4] for item in host_samples if item[4]]
         print(
             f"  host={host} ranks={len(host_samples)} opacity_ranks={loaded} "
-            f"rank_rss_sum={format_bytes(rss_sum)} max_rank_peak={format_bytes(max_peak)}",
+            f"rank_rss_sum={format_bytes(rss_sum)} "
+            f"max_rank_peak={format_bytes(max_peak)} diagnostic_errors={errors}",
             flush=True,
         )
 
@@ -632,11 +700,14 @@ def acquire_output_lock(destination, rank):
     lock_handle = lock_path.open("a+")
     try:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (BlockingIOError, OSError) as exc:
+    except BlockingIOError as exc:
         lock_handle.close()
         raise RuntimeError(
             f"another process/job owns output lock {lock_path}; refusing a write race"
         ) from exc
+    except OSError as exc:
+        lock_handle.close()
+        raise RuntimeError(f"cannot acquire output lock {lock_path}: {exc}") from exc
     lock_handle.seek(0)
     lock_handle.truncate()
     lock_handle.write(
@@ -645,6 +716,23 @@ def acquire_output_lock(destination, rank):
     )
     lock_handle.flush()
     return lock_handle
+
+
+def probe_output_locking(directory):
+    """Fail before model work if this filesystem cannot provide `flock`."""
+    probe_path = Path(directory) / f".restart_safe_lock_probe.{uuid.uuid4().hex}"
+    probe_handle = None
+    try:
+        probe_handle = probe_path.open("w")
+        fcntl.flock(probe_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(probe_handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        if probe_handle is not None:
+            probe_handle.close()
+        try:
+            probe_path.unlink()
+        except OSError:
+            pass
 
 
 def atomic_write_output(
@@ -871,14 +959,19 @@ def inspect_opacity_file(path, rank):
 def main():
     args = parse_args()
     initialize_mpi_runtime()
-    if args.suppress_warnings:
-        warnings.filterwarnings("ignore")
-    else:
-        warnings.simplefilter("default")
-
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
+
+    # MPI ranks otherwise repeat the same warning many times.  Keep one useful
+    # copy from rank 0, hide noisy third-party file-cleanup ResourceWarnings,
+    # and leave exceptions/tracebacks completely unaffected.
+    warnings.resetwarnings()
+    if args.suppress_warnings or rank != 0:
+        warnings.simplefilter("ignore")
+    else:
+        warnings.simplefilter("once")
+        warnings.filterwarnings("ignore", category=ResourceWarning)
     mark("process-start", rank)
 
     preflight_ok, preflight_record = mpi_preflight(
@@ -939,6 +1032,22 @@ def main():
         if rank == 0:
             print(f"SAFE FATAL: {directory_error}", file=sys.stderr, flush=True)
         return 2
+    if not args.no_write and rank == 0:
+        try:
+            probe_output_locking(args.output_dir)
+            lock_probe_error = None
+        except Exception as exc:
+            lock_probe_error = (
+                f"output filesystem does not support the required advisory lock: {exc}"
+            )
+    else:
+        lock_probe_error = None
+    lock_probe_error = comm.bcast(lock_probe_error, root=0)
+    if lock_probe_error:
+        if rank == 0:
+            print(f"SAFE FATAL: {lock_probe_error}", file=sys.stderr, flush=True)
+        return 2
+    comm.Barrier()
 
     # Inactive/idle ranks remain lightweight so --ranks-per-node genuinely
     # lowers aggregate node memory.  Rank 0 imports only NumPy/HDF5 for schema
@@ -994,6 +1103,28 @@ def main():
     )
 
     global_work = comm.allreduce(bool(work_tasks), op=MPI.LOR)
+    source_errors = []
+    source_paths = sorted(
+        {
+            fname_from_params(args.input_dir, grav, tint, 0.04)
+            for grav, tint, _semi_major in work_tasks
+        }
+    )
+    for source in source_paths:
+        try:
+            initial_guess(source)
+        except Exception as exc:
+            source_errors.append(f"{source}: {exc}")
+    local_error = "; ".join(source_errors) if source_errors else None
+    if collective_errors(comm, "starting-profile validation", local_error):
+        return 2
+    if work_tasks:
+        mark(
+            "starting-profiles-validated",
+            rank,
+            f"unique_sources={len(source_paths)}",
+        )
+
     refdata = os.environ.get("picaso_refdata")
     ck_path = None
     if global_work:
@@ -1103,4 +1234,14 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        _exit_code = main()
+    except Exception:
+        print("SAFE UNHANDLED ERROR", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        if MPI is not None and MPI.Is_initialized() and not MPI.Is_finalized():
+            _abort_comm = MPI.COMM_WORLD
+            if _abort_comm.Get_size() > 1:
+                _abort_comm.Abort(2)
+        _exit_code = 2
+    sys.exit(_exit_code)
