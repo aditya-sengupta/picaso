@@ -129,5 +129,5 @@ def run(grav, tint, semi_major, pressure_start, temperature_start, nstr_upper):
         print(traceback.format_exc())
         return False
 
-pressure_start, temperature_start, nstr_upper_init = initial_guess(fname_from_params(177, 400, 0.02))
-run(177, 350, 0.02, pressure_start, temperature_start, nstr_upper_init)
+pressure_start, temperature_start, nstr_upper_init = initial_guess(fname_from_params(31, 300, 0.04))
+run(31, 300, 0.5, pressure_start, temperature_start, nstr_upper_init)

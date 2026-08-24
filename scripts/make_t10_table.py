@@ -14,7 +14,7 @@ if not picaso_path.endswith("picaso"):
 bobcat_path = os.path.join(__refdata__, "sonora_grids", "bobcat")
 
 count_available_overall, count_all_overall = 0, 0
-for fsed in ["nc"]:
+for fsed in ["nc", 1, 2, 3, 4, 8]:
     fsed_str = f"f{fsed}" if fsed != "nc" else "nc"
     fig, axs = plt.subplots(2, 3, figsize=(8, 6))
     # log_gravs = [3.25, 3.5, 4, 4.5, 5, 5.5]
@@ -36,7 +36,7 @@ for fsed in ["nc"]:
                 semimajor_str = (
                     "ns" if semimajor == np.inf else f"semimajor{semimajor:.2f}"
                 )
-                fname = f"data/unified/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
+                fname = f"data/unified_restart/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
                 count_all += 1
                 count_all_overall += 1
                 if os.path.exists(os.path.join(picaso_path, fname)):
