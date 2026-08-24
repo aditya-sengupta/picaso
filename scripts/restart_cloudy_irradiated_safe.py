@@ -224,7 +224,12 @@ comm.Barrier()
 local_completed = 0
 local_failed = 0
 
-for i, (grav, tint, semi_major, fsed) in enumerate(generate_tasks()):
+tasks = list(generate_tasks()) if rank == 0 else None
+if rank == 0 and len(tasks) != len(set(tasks)):
+    raise RuntimeError("generate_tasks() produced duplicate tasks")
+tasks = comm.bcast(tasks, root=0)
+
+for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
     if i % size == rank and opacity_ck is not None:
         result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
         if result:
