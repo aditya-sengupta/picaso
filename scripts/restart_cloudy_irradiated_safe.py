@@ -3,6 +3,8 @@
 # and adds in fixed clouds
 # it remains after this to do cloudy unirradiated
 
+# mpiexec -n 64 python -u -m mpi4py scripts/restart_cloudy_irradiated_safe.py
+
 import os
 
 safe_threads = os.getenv("PICASO_SAFE_THREADS_PER_RANK", "1")
@@ -64,7 +66,7 @@ ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 sonora_profile_db = os.path.join(__refdata__,'sonora_grids', 'bobcat', "structures_m+0.0")
 
 # effective^4 = equilibrium^4 + intrinsic^4
-# tints = np.arange(100, 2401, 50)
+tints = np.arange(100, 2401, 50)
 semi_majors = [0.02, 0.04, 0.13, 0.5]
 fseds = [1, 2, 3, 4, 8]
 
@@ -106,7 +108,9 @@ def generate_tasks():
         for tint in tints:
             for semi_major in semi_majors:
                 for fsed in fseds:
-                    yield (grav, tint, semi_major, fsed)
+                    fname = fname_from_params(grav, tint, semi_major, fsed)
+                    if not os.path.exists(fname):
+                        yield (grav, tint, semi_major, fsed)
 
 def crash_details(rank, stage):
     rss = psutil.Process().memory_info().rss / 1024**2
@@ -118,7 +122,6 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
     try:
         fname_start = fname_from_params(grav, tint, semi_major, -1)
         pressure_start, temperature_start, nstr_upper = initial_guess(fname_start)
-        nstr_upper = 89
         max_pressure = np.max(pressure_start)
         acceptable = False
         attempt = 0
@@ -127,7 +130,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             pressure_grid = np.logspace(np.log10(np.min(pressure_start)), np.log10(max_pressure * 16), nlevel)
             temp_guess = regrid_initial_guess(pressure_start, temperature_start, pressure_grid)
             rcb_pressure = pressure_start[nstr_upper]
-            # nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper
+            nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper
             nstr_upper_init = nstr_upper
             temp_guess_init = np.copy(temp_guess)
             print(f"[{grav}, {tint}, {semi_major}] Starting at nstr_upper = {nstr_upper} on rank {rank}")
