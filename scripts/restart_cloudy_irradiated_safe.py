@@ -18,14 +18,15 @@ import argparse
 import warnings
 warnings.filterwarnings('ignore')
 import traceback
-import faulthandler
+import math
+from pathlib import Path
 from time import sleep
 
-faulthandler.enable(all_threads=True)
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 import picaso
+import picaso.climate as picaso_climate
 import picaso.justdoit as jdi
 import picaso.justplotit as jpi
 import virga
@@ -45,6 +46,7 @@ from collections import namedtuple
 sys.path.append(".")
 from out_to_hdf5 import out_to_hdf5
 from calculate_t10 import t10, regrid_initial_guess
+from numba_cache_guard import enforce_numba_cache_limit
 
 cloudmode = "fixed"
 calc_type = "planet"
@@ -112,13 +114,8 @@ def generate_tasks():
                     if not os.path.exists(fname):
                         yield (grav, tint, semi_major, fsed)
 
-def crash_details(rank, stage):
-    rss = psutil.Process().memory_info().rss / 1024**2
-    return f"stage={stage}, host={MPI.Get_processor_name()}, pid={os.getpid()}, rank={rank}, RSS={rss:.1f} MiB"
-
 def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
     fname = fname_from_params(grav, tint, semi_major, fsed)
-    stage = "loading initial profile"
     try:
         fname_start = fname_from_params(grav, tint, semi_major, -1)
         pressure_start, temperature_start, nstr_upper = initial_guess(fname_start)
@@ -135,7 +132,6 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             temp_guess_init = np.copy(temp_guess)
             print(f"[{grav}, {tint}, {semi_major}] Starting at nstr_upper = {nstr_upper} on rank {rank}")
 
-            stage = f"setting up model, attempt {attempt}/{max_attempts}"
             cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
             cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
             cl_run.effective_temp(tint) # input effective temperature
@@ -146,11 +142,9 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
             virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
             virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
-            stage = f"computing Virga clouds, attempt {attempt}/{max_attempts}"
             virga_out = vj.compute(virga_planet, as_dict=True, directory=os.path.join(virga_path, "refrind"))
             cl_run.fix_virga_clouds(virga_out)
             cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
-            stage = f"running PICASO climate, attempt {attempt}/{max_attempts}"
             out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
             max_temperature = np.max(out["temperature"])
             acceptable = np.isfinite(max_temperature) and max_temperature < 5100.0
@@ -163,7 +157,6 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
         if not acceptable:
             raise RuntimeError(f"temperature remained too hot ({max_temperature:.3f} K) after {max_attempts} attempts")
 
-        stage = "writing HDF5 output"
         fname_tmp = f"{fname}.tmp.{MPI.Get_processor_name()}.{rank}.{os.getpid()}"
         with h5py.File(fname_tmp, "w") as f:
             f["temp_guess"] = temp_guess_init
@@ -173,7 +166,6 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             f.attrs["t10"] = t10_this
             print(f"t10 at {grav, tint, semi_major} = {t10_this:.3f}")
             out_to_hdf5(out, f)
-        stage = "replacing final HDF5 output"
         os.replace(fname_tmp, fname)
 
         print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✓ Saved to disk")
@@ -198,7 +190,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
                 os.remove(fname_tmp)
             except OSError:
                 pass
-        print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error ({crash_details(rank, stage)}): {type(e).__name__}: {e}")
+        print(f"[{grav}, {tint}, {semi_major}, {fsed}] ✗ Error: {e}")
         print(traceback.format_exc())
         return False
     finally:
@@ -209,16 +201,119 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 def abort_on_unhandled(exc_type, exc, tb):
-    print(f"Unhandled crash ({crash_details(rank, 'MPI setup or task coordination')}): {exc_type.__name__}: {exc}", file=sys.stderr, flush=True)
-    traceback.print_exception(exc_type, exc, tb)
+    sys.__excepthook__(exc_type, exc, tb)
     if size > 1:
         comm.Abort(1)
 
 sys.excepthook = abort_on_unhandled
 
+cache_config_result = None
+if rank == 0:
+    try:
+        configured_max_gib = float(os.getenv("PICASO_NUMBA_CACHE_MAX_GIB", "5"))
+        configured_check_rounds = int(
+            os.getenv("PICASO_NUMBA_CACHE_CHECK_ROUNDS", "8")
+        )
+        if not math.isfinite(configured_max_gib) or configured_max_gib < 0:
+            raise ValueError("PICASO_NUMBA_CACHE_MAX_GIB must be finite and non-negative")
+        if configured_check_rounds < 0:
+            raise ValueError("PICASO_NUMBA_CACHE_CHECK_ROUNDS must be non-negative")
+        cache_config_result = (
+            None,
+            configured_max_gib,
+            configured_check_rounds,
+        )
+    except Exception as exc:
+        cache_config_result = (f"{type(exc).__name__}: {exc}", 0, 0)
+
+cache_config_error, numba_cache_max_gib, numba_cache_check_rounds = comm.bcast(
+    cache_config_result,
+    root=0,
+)
+if cache_config_error is not None:
+    raise RuntimeError(f"Invalid Numba cache guard configuration: {cache_config_error}")
+
+numba_cache_guard_enabled = numba_cache_max_gib > 0 and numba_cache_check_rounds > 0
+numba_cache_max_bytes = int(numba_cache_max_gib * 1024**3)
+
+
+def resolve_numba_cache_dir():
+    cache_dir = Path(picaso_climate.t_start._cache.cache_path).resolve()
+    unsafe_paths = {
+        Path(cache_dir.anchor),
+        Path.home().resolve(),
+        Path(picaso.__path__[0]).resolve(),
+    }
+    if cache_dir in unsafe_paths:
+        raise RuntimeError(f"Refusing unsafe Numba cache directory: {cache_dir}")
+    return cache_dir
+
+
+numba_cache_dir = None
+if numba_cache_guard_enabled:
+    cache_dir_result = None
+    if rank == 0:
+        try:
+            cache_dir_result = (None, str(resolve_numba_cache_dir()))
+        except Exception as exc:
+            cache_dir_result = (f"{type(exc).__name__}: {exc}", None)
+    cache_dir_error, numba_cache_dir = comm.bcast(cache_dir_result, root=0)
+    if cache_dir_error is not None:
+        raise RuntimeError(f"Could not resolve Numba cache directory: {cache_dir_error}")
+
+
+def guard_numba_cache(reason):
+    """Collectively clear oversized Numba cache artifacts between task blocks."""
+    if not numba_cache_guard_enabled:
+        return
+
+    # Every rank in this MPI job reaches this only between models. The barrier
+    # prevents an in-job cache race; separate concurrent jobs should use
+    # different NUMBA_CACHE_DIR values.
+    comm.Barrier()
+    payload = None
+    if rank == 0:
+        try:
+            result = enforce_numba_cache_limit(
+                numba_cache_dir,
+                numba_cache_max_bytes,
+            )
+            if result.after_bytes > numba_cache_max_bytes:
+                raise RuntimeError(
+                    f"cache remains at {result.after_bytes / 1024**3:.2f} GiB "
+                    f"after removing {result.removed_files} Numba artifacts"
+                )
+            payload = (
+                None,
+                result.before_bytes,
+                result.after_bytes,
+                result.removed_files,
+                result.removed_bytes,
+            )
+        except Exception as exc:
+            payload = (f"{type(exc).__name__}: {exc}", 0, 0, 0, 0)
+
+    error, before_bytes, after_bytes, removed_files, removed_bytes = comm.bcast(
+        payload,
+        root=0,
+    )
+    if error is not None:
+        raise RuntimeError(f"Numba cache guard failed at {reason}: {error}")
+
+    if rank == 0 and removed_files:
+        print(
+            f"Numba cache guard ({reason}): cache was "
+            f"{before_bytes / 1024**3:.2f} GiB; removed {removed_files} files "
+            f"({removed_bytes / 1024**3:.2f} GiB); "
+            f"now {after_bytes / 1024**3:.2f} GiB",
+            flush=True,
+        )
+
 opacity_ck = None
 if rank == 0:
     print(f"Starting run")
+
+guard_numba_cache("startup")
 
 ck_db = os.path.join(os.getenv('picaso_refdata'),'opacities', 'preweighted', f'sonora_2121grid_feh{mh}_co{CtoO}.hdf5')
 opacity_ck = jdi.opannection(ck_db=ck_db, method='preweighted')
@@ -232,13 +327,22 @@ if rank == 0 and len(tasks) != len(set(tasks)):
     raise RuntimeError("generate_tasks() produced duplicate tasks")
 tasks = comm.bcast(tasks, root=0)
 
-for i, (grav, tint, semi_major, fsed) in enumerate(tasks):
-    if i % size == rank and opacity_ck is not None:
-        result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
-        if result:
-            local_completed += 1
-        else:
-            local_failed += 1
+if numba_cache_guard_enabled:
+    task_block_size = size * numba_cache_check_rounds
+else:
+    task_block_size = max(1, len(tasks))
+
+for block_start in range(0, len(tasks), task_block_size):
+    block_end = min(block_start + task_block_size, len(tasks))
+    for i in range(block_start, block_end):
+        grav, tint, semi_major, fsed = tasks[i]
+        if i % size == rank and opacity_ck is not None:
+            result = run(grav, tint, semi_major, fsed, opacity_ck, rank)
+            if result:
+                local_completed += 1
+            else:
+                local_failed += 1
+    guard_numba_cache(f"after task block {block_start}:{block_end}")
 
 completed = comm.allreduce(local_completed, op=MPI.SUM)
 failed = comm.allreduce(local_failed, op=MPI.SUM)
