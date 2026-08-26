@@ -160,7 +160,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
             f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
             t10_this = t10(pressure_grid, out["temperature"])
             f.attrs["t10"] = t10_this
-            print(f"t10 at {grav, tint, semi_major} = {t10_this:.3f}")
+            print(f"t10 at {grav, tint, semi_major, fsed} = {t10_this:.3f}")
             out_to_hdf5(out, f)
         os.replace(fname_tmp, fname)
 
