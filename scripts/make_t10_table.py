@@ -36,7 +36,7 @@ for fsed in ["nc", 1, 2, 3, 4, 8]:
                 semimajor_str = (
                     "ns" if semimajor == np.inf else f"semimajor{semimajor:.2f}"
                 )
-                fname = f"data/unified_restart/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
+                fname = f"data/asengupta/unified_restart/unified_tint{teff}_grav{grav}_{semimajor_str}_{fsed_str}.h5"
                 count_all += 1
                 count_all_overall += 1
                 if os.path.exists(os.path.join(picaso_path, fname)):

@@ -6,6 +6,7 @@
 # mpiexec -n 64 python -u -m mpi4py scripts/restart_cloudy_irradiated_safe.py
 
 import os
+import socket
 
 safe_threads = os.getenv("PICASO_SAFE_THREADS_PER_RANK", "1")
 for thread_env in ("OMP_NUM_THREADS", "OMP_THREAD_LIMIT", "OPENBLAS_NUM_THREADS",
@@ -53,6 +54,8 @@ virga_path = os.getenv('virga')
 picaso_path = os.path.dirname(picaso.__path__[0])
 __refdata__ = os.getenv('picaso_refdata')
 
+data_path = os.path.join(picaso_path, "data")
+
 mh = '0.0'
 CtoO = '0.46'
 nlevel = 91
@@ -68,7 +71,7 @@ tints = np.arange(100, 2401, 50)
 semi_majors = [0.02, 0.04, 0.13, 0.5]
 fseds = [1, 2, 3, 4, 8]
 
-gravs = [10, 17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160]
+gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
@@ -86,7 +89,7 @@ def semi_major_str(semi_major):
 
 def fname_from_params(grav, tint, semi_major, fsed):
     fname_stem = f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_{fsed_str(fsed)}"
-    return os.path.join(picaso_path, "data", "unified_restart", f"{fname_stem}.h5")
+    return os.path.join(data_path, "unified_restart", f"{fname_stem}.h5")
 
 def initial_guess(fname):
     with h5py.File(fname) as f:
@@ -120,7 +123,7 @@ def run(grav, tint, semi_major, fsed, opacity_ck, rank=-1):
         attempt = 0
         while not acceptable and attempt < max_attempts:
             attempt += 1
-            pressure_grid = np.logspace(np.log10(np.min(pressure_start)), np.log10(max_pressure * 16), nlevel)
+            pressure_grid = np.logspace(np.log10(np.min(pressure_start)), np.log10(max_pressure) * 2, nlevel)
             temp_guess = regrid_initial_guess(pressure_start, temperature_start, pressure_grid)
             rcb_pressure = pressure_start[nstr_upper]
             nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper

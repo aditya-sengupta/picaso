@@ -1,9 +1,18 @@
 # unifying all the scripts was stupid
-# this starts from the no-star no-cloud runs in restart_bobcat_match.py
-# and adds in irradiation
+# this starts from the irradiated no-cloud runs in restart_cloudless_irradiated.py
+# and adds in fixed clouds
+# it remains after this to do cloudy unirradiated
+
+# mpiexec -n 64 python -u -m mpi4py scripts/restart_cloudy_irradiated_safe.py
 
 import os
 import socket
+
+safe_threads = os.getenv("PICASO_SAFE_THREADS_PER_RANK", "1")
+for thread_env in ("OMP_NUM_THREADS", "OMP_THREAD_LIMIT", "OPENBLAS_NUM_THREADS",
+                   "MKL_NUM_THREADS", "BLIS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ[thread_env] = safe_threads
+
 import psutil
 import sys
 import argparse
@@ -12,9 +21,14 @@ warnings.filterwarnings('ignore')
 import traceback
 from time import sleep
 
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 import picaso
 import picaso.justdoit as jdi
 import picaso.justplotit as jpi
+import virga
+import virga.justdoit as vj
 import astropy.units as u
 import astropy.constants as c
 import numpy as np
@@ -31,17 +45,21 @@ sys.path.append(".")
 from out_to_hdf5 import out_to_hdf5
 from calculate_t10 import t10, regrid_initial_guess
 
-cloudmode = "cloudless"
-calc_type = "planet"
+cloudmode = "fixed"
+calc_type = "browndwarf"
+
+cloud_species = ["MgSiO3", "Mg2SiO4", "Fe", "Al2O3"]
+virga_path = os.getenv('virga')
 
 picaso_path = os.path.dirname(picaso.__path__[0])
 __refdata__ = os.getenv('picaso_refdata')
 
-data_path = "/data/asengupta" if socket.gethostname() == "k838t" else os.path.join(picaso_path, "data")
+data_path = os.path.join(picaso_path, "data")
 
 mh = '0.0'
 CtoO = '0.46'
 nlevel = 91
+max_attempts = 8
 ck_stem = f'sonora_2121grid_feh{mh}_co{CtoO}'
 ck_stem += ".hdf5"
 ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
@@ -49,24 +67,26 @@ ck_db = os.path.join(__refdata__, 'opacities', 'preweighted', ck_stem)
 sonora_profile_db = os.path.join(__refdata__,'sonora_grids', 'bobcat', "structures_m+0.0")
 
 # effective^4 = equilibrium^4 + intrinsic^4
-# tints = np.arange(100, 2401, 50)
 tints = np.arange(100, 2401, 50)
-# semi_majors = [0.5, 0.13, 0.04, 0.02]
-semi_majors = [0.02, 0.04, 0.13, 0.5]
+fseds = [1, 2, 3, 4, 8]
 
 gravs = [10, 17, 31, 56, 100, 177, 316, 562, 1000, 1778, 3160]
 bobcat_temps = np.arange(200, 2401, 100) # it's not quite this, but this'll do fine
 bobcat_gravs = np.array([17, 31, 56, 100, 178, 316, 562, 1000, 1780, 3160])
 
-def semi_major_str(semi_major):
-    if semi_major == -1:
-        return "ns"
+def fsed_str(fsed):
+    if fsed == -1:
+        return "nc"
     else:
-        return f"semimajor{semi_major:.2f}"
+        return "f" + str(fsed)
 
-def fname_from_params(grav, tint, semi_major):
-    fname_stem = f"unified_tint{tint}_grav{grav}_{semi_major_str(semi_major)}_nc"
+def fname_from_params(grav, tint, fsed):
+    fname_stem = f"unified_tint{tint}_grav{grav}_ns_{fsed_str(fsed)}"
     return os.path.join(data_path, "unified_restart", f"{fname_stem}.h5")
+
+def fname_from_params_condensed(grav, tint, fsed):
+    fname_stem = f"unified_tint{tint}_grav{grav}_ns_{fsed_str(fsed)}"
+    return os.path.join(data_path, "unified_restart_condensed", f"{fname_stem}.h5")
 
 def initial_guess(fname):
     with h5py.File(fname) as f:
@@ -84,61 +104,66 @@ def initial_guess(fname):
 def generate_tasks():
     for grav in gravs:
         for tint in tints:
-            for semi_major in semi_majors:
-                    fname = fname_from_params(grav, tint, semi_major)
-                    if not os.path.exists(fname):
-                        yield (grav, tint, semi_major)
+            for fsed in fseds:
+                fname = fname_from_params(grav, tint, fsed)
+                if not os.path.exists(fname):
+                    yield (grav, tint, fsed)
 
-def run(grav, tint, semi_major, opacity_ck, rank=-1):
-    fname = fname_from_params(grav, tint, semi_major)
+def run(grav, tint, fsed, opacity_ck, rank=-1):
+    fname = fname_from_params(grav, tint, fsed)
     try:
-        grav_start = grav
-        if grav == 177:
-            grav_start = 100
-        if grav == 1778:
-            grav_start = 1000
-        fname_start = fname_from_params(grav_start, tint, 0.04)
+        fname_start = fname_from_params_condensed(grav, tint, -1)
         pressure_start, temperature_start, nstr_upper = initial_guess(fname_start)
-        # we did this^ for all except the 0.02 and 0.04 au at 100-800K, relative to unirradiated
-        # and we're also doing this for 0.02, 0.13, 0.5 relative to 0.04 for 100-500K
-        # teff_bobcat, grav_bobcat = bobcat_temps[np.argmin(np.abs(bobcat_temps - tint))], bobcat_gravs[np.argmin(np.abs(bobcat_gravs - grav))]
-        # pressure_start, temperature_start = np.loadtxt(os.path.join(sonora_profile_db,f"t{teff_bobcat}g{grav_bobcat}nc_m0.0.dat"), usecols=[1,2],unpack=True, skiprows = 1)
-        nstr_upper = 89
         max_pressure = np.max(pressure_start)
         acceptable = False
-        while not acceptable:
-            pressure_grid = np.logspace(np.log10(np.min(pressure_start)), np.log10(max_pressure * 16), nlevel)
+        attempt = 0
+        while not acceptable and attempt < max_attempts:
+            attempt += 1
+            pressure_grid = np.logspace(np.log10(np.min(pressure_start)), np.log10(max_pressure) * 4, nlevel)
             temp_guess = regrid_initial_guess(pressure_start, temperature_start, pressure_grid)
             rcb_pressure = pressure_start[nstr_upper]
-            # nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper
+            nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper
             nstr_upper_init = nstr_upper
             temp_guess_init = np.copy(temp_guess)
-            print(f"[{grav}, {tint}, {semi_major}] Starting at nstr_upper = {nstr_upper} on rank {rank}")
+            print(f"[{grav}, {tint}, {fsed}] Starting at nstr_upper = {nstr_upper} on rank {rank}")
 
             cl_run = jdi.inputs(calculation=calc_type, climate = True) # start a calculation - need to not have "brown" in `calculation`. BD almost always means free-floating.
             cl_run.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)')) # input gravity
             cl_run.effective_temp(tint) # input effective temperature
-            cl_run.star(opacity_ck, temp=5778.0, metal=0.0, logg=4.4, radius=1.0, database='phoenix', radius_unit=u.R_sun, semi_major=semi_major, semi_major_unit=u.AU)
-            rfacv = 0.5
+            rfacv = 0.0
             cl_run.inputs_climate(temp_guess=temp_guess, pressure=pressure_grid, rcb_guess=nstr_upper, rfacv=rfacv)
+            kz = np.ones_like(pressure_grid) * 1e10 # idk
+            virga_planet = vj.Atmosphere(cloud_species, fsed=fsed, mh=1, mmw=2.2)
+            virga_planet.gravity(gravity=grav, gravity_unit=u.Unit('m/(s**2)'))
+            virga_planet.ptk(df = pd.DataFrame({'pressure':pressure_grid, 'temperature': temp_guess, 'kz': kz}), kz_min=1e5, latent_heat=True)
+            virga_out = vj.compute(virga_planet, as_dict=True, directory=os.path.join(virga_path, "refrind"))
+            cl_run.fix_virga_clouds(virga_out)
             cl_run.atmosphere(mh=1, cto_relative=1, chem_method='visscher') # on the fly mixing
             out = cl_run.climate(opacity_ck, save_all_profiles=True, with_spec=True, verbose=False)
-            acceptable = np.max(out["temperature"]) < 5100.0
+            max_temperature = np.max(out["temperature"])
+            acceptable = np.isfinite(max_temperature) and max_temperature < 5100.0
             if not acceptable:
                 max_pressure = max_pressure / 2
-                print(f"[{grav}, {tint}, {semi_major}] too hot, reducing max pressure")
-        
-        with h5py.File(fname, "w") as f:
+                print(f"[{grav}, {tint}, {fsed}] too hot, reducing max pressure")
+                cl_run = out = temp_guess = temp_guess_init = virga_out = virga_planet = None
+                gc.collect()
+
+        if not acceptable:
+            raise RuntimeError(f"temperature remained too hot ({max_temperature:.3f} K) after {max_attempts} attempts")
+
+        fname_tmp = f"{fname}.tmp.{MPI.Get_processor_name()}.{rank}.{os.getpid()}"
+        with h5py.File(fname_tmp, "w") as f:
             f["temp_guess"] = temp_guess_init
             f.attrs["nstr_upper_init"] = nstr_upper_init
             f.attrs["effective_temperature"] = out["spectrum_output"]["effective_temperature"]
             t10_this = t10(pressure_grid, out["temperature"])
             f.attrs["t10"] = t10_this
-            print(f"t10 at {grav, tint, semi_major} = {t10_this:.3f}")
+            print(f"t10 at {grav, tint, fsed} = {t10_this:.3f}")
             out_to_hdf5(out, f)
-        
-        print(f"[{grav}, {tint}, {semi_major}] ✓ Saved to disk")
-        
+        os.replace(fname_tmp, fname)
+
+        print(f"[{grav}, {tint}, {fsed}] ✓ Saved to disk")
+
         del cl_run, out, temp_guess
         if 'temp_guess_init' in locals():
             del temp_guess_init
@@ -146,17 +171,35 @@ def run(grav, tint, semi_major, opacity_ck, rank=-1):
             del temperature_start
         if 'pressure_start' in locals():
             del pressure_start
-                
+        if 'virga_out' in locals():
+            del virga_out
+        if 'virga_planet' in locals():
+            del virga_planet
+
         return True
-        
+
     except Exception as e:
-        print(f"[{grav}, {tint}, {semi_major}] ✗ Error: {e}")
+        if 'fname_tmp' in locals():
+            try:
+                os.remove(fname_tmp)
+            except OSError:
+                pass
+        print(f"[{grav}, {tint}, {fsed}] ✗ Error: {e}")
         print(traceback.format_exc())
         return False
+    finally:
+        gc.collect()
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
+
+def abort_on_unhandled(exc_type, exc, tb):
+    sys.__excepthook__(exc_type, exc, tb)
+    if size > 1:
+        comm.Abort(1)
+
+sys.excepthook = abort_on_unhandled
 
 opacity_ck = None
 if rank == 0:
@@ -169,9 +212,15 @@ comm.Barrier()
 local_completed = 0
 local_failed = 0
 
-for i, (grav, tint, semi_major) in enumerate(generate_tasks()):
-    if i % size == rank and opacity_ck is not None:
-        result = run(grav, tint, semi_major, opacity_ck, rank)
+tasks = list(generate_tasks()) if rank == 0 else None
+if rank == 0 and len(tasks) != len(set(tasks)):
+    raise RuntimeError("generate_tasks() produced duplicate tasks")
+tasks = comm.bcast(tasks, root=0)
+
+for i in range(rank, len(tasks), size):
+    grav, tint, fsed = tasks[i]
+    if opacity_ck is not None:
+        result = run(grav, tint, fsed, opacity_ck, rank)
         if result:
             local_completed += 1
         else:
@@ -184,3 +233,6 @@ if rank == 0:
     print(f"\n=== Summary ===")
     print(f"Total Completed: {completed}")
     print(f"Total Failed: {failed}")
+
+if failed:
+    sys.exit(1)
