@@ -105,7 +105,7 @@ def generate_tasks():
     for grav in gravs:
         for tint in tints:
             for fsed in fseds:
-                fname = fname_from_params(grav, tint, fsed)
+                fname = fname_from_params_condensed(grav, tint, fsed)
                 if not os.path.exists(fname):
                     yield (grav, tint, fsed)
 
@@ -122,7 +122,8 @@ def run(grav, tint, fsed, opacity_ck, rank=-1):
             pressure_grid = np.logspace(np.log10(np.min(pressure_start)), np.log10(max_pressure) * 4, nlevel)
             temp_guess = regrid_initial_guess(pressure_start, temperature_start, pressure_grid)
             rcb_pressure = pressure_start[nstr_upper]
-            nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper
+            # nstr_upper = min(89, np.argmin(np.abs(pressure_grid - rcb_pressure)) + 1) # account for the regrid in picking nstr_upper
+            nstr_upper = 89
             nstr_upper_init = nstr_upper
             temp_guess_init = np.copy(temp_guess)
             print(f"[{grav}, {tint}, {fsed}] Starting at nstr_upper = {nstr_upper} on rank {rank}")

@@ -7,4 +7,6 @@ while true; do
     if [[ $exit_code -ne 9 && $exit_code -ne 137 ]]; then
         exit "$exit_code"
     fi
+
+    rm -r picaso/__pycache__
 done
